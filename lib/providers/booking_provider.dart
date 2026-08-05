@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../core/constants.dart';
 import '../models/entities.dart';
 import '../repositories/booking_repository.dart';
 
@@ -18,8 +19,8 @@ class BookingProvider extends ChangeNotifier {
   }) async {
     final fare = FareBreakdown(
       fare: flight.price(cabinClass) * passengers.length,
-      tax: 700 * passengers.length.toDouble(),
-      service: 150 * passengers.length.toDouble(),
+      tax: AppConstants.airportTax * passengers.length.toDouble(),
+      service: AppConstants.serviceFee * passengers.length.toDouble(),
       seatFee: seats.length * 200,
     );
     final booking = BookingEntity(

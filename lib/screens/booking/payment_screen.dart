@@ -6,6 +6,7 @@ import '../../models/entities.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/booking_provider.dart';
 import '../../providers/language_provider.dart';
+import '../../core/constants.dart';
 import '../../widgets/app_widgets.dart';
 import 'ticket_screen.dart';
 
@@ -33,8 +34,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   FareBreakdown get fare => FareBreakdown(
         fare: widget.flight.price(widget.cabinClass) * widget.passengers.length,
-        tax: 700 * widget.passengers.length.toDouble(),
-        service: 150 * widget.passengers.length.toDouble(),
+        tax: AppConstants.airportTax * widget.passengers.length.toDouble(),
+        service: AppConstants.serviceFee * widget.passengers.length.toDouble(),
         seatFee: widget.seats.length * 200,
       );
 
