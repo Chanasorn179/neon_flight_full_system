@@ -1,27 +1,30 @@
 enum CabinClass { economy, premiumEconomy, business, first }
+
 enum TripType { oneWay, roundTrip }
+
 enum BookingStatus { upcoming, completed, cancelled }
+
 enum PaymentMethod { promptPay, card, mobileBanking }
 
 extension CabinClassX on CabinClass {
   String get labelEn => switch (this) {
-        CabinClass.economy => 'Economy',
-        CabinClass.premiumEconomy => 'Premium Economy',
-        CabinClass.business => 'Business',
-        CabinClass.first => 'First Class',
-      };
+    CabinClass.economy => 'Economy',
+    CabinClass.premiumEconomy => 'Premium Economy',
+    CabinClass.business => 'Business',
+    CabinClass.first => 'First Class',
+  };
   String get labelTh => switch (this) {
-        CabinClass.economy => 'ชั้นประหยัด',
-        CabinClass.premiumEconomy => 'ชั้นประหยัดพรีเมียม',
-        CabinClass.business => 'ชั้นธุรกิจ',
-        CabinClass.first => 'ชั้นหนึ่ง',
-      };
+    CabinClass.economy => 'ชั้นประหยัด',
+    CabinClass.premiumEconomy => 'ชั้นประหยัดพรีเมียม',
+    CabinClass.business => 'ชั้นธุรกิจ',
+    CabinClass.first => 'ชั้นหนึ่ง',
+  };
   double get multiplier => switch (this) {
-        CabinClass.economy => 1,
-        CabinClass.premiumEconomy => 1.45,
-        CabinClass.business => 2.8,
-        CabinClass.first => 4.6,
-      };
+    CabinClass.economy => 1,
+    CabinClass.premiumEconomy => 1.45,
+    CabinClass.business => 2.8,
+    CabinClass.first => 4.6,
+  };
 }
 
 class UserEntity {
@@ -32,7 +35,13 @@ class UserEntity {
 }
 
 class AirportEntity {
-  const AirportEntity({required this.code, required this.cityEn, required this.cityTh, required this.nameEn, required this.nameTh});
+  const AirportEntity({
+    required this.code,
+    required this.cityEn,
+    required this.cityTh,
+    required this.nameEn,
+    required this.nameTh,
+  });
   final String code;
   final String cityEn;
   final String cityTh;
@@ -91,7 +100,12 @@ class PassengerEntity {
 }
 
 class FareBreakdown {
-  const FareBreakdown({required this.fare, required this.tax, required this.service, required this.seatFee});
+  const FareBreakdown({
+    required this.fare,
+    required this.tax,
+    required this.service,
+    required this.seatFee,
+  });
   final double fare;
   final double tax;
   final double service;
@@ -124,8 +138,43 @@ class BookingEntity {
   final DateTime createdAt;
 }
 
+class TransferBookingEntity {
+  const TransferBookingEntity({
+    required this.id,
+    required this.userId,
+    required this.airportCode,
+    required this.airportNameEn,
+    required this.airportNameTh,
+    required this.pickupEn,
+    required this.pickupTh,
+    required this.pickupTime,
+    required this.flightDepartureTime,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String userId;
+  final String airportCode;
+  final String airportNameEn;
+  final String airportNameTh;
+  final String pickupEn;
+  final String pickupTh;
+  final DateTime pickupTime;
+  final DateTime flightDepartureTime;
+  final BookingStatus status;
+  final DateTime createdAt;
+}
+
 class PromotionEntity {
-  const PromotionEntity({required this.title, required this.from, required this.to, required this.cabinClass, required this.discountPercent, required this.seatsLeft});
+  const PromotionEntity({
+    required this.title,
+    required this.from,
+    required this.to,
+    required this.cabinClass,
+    required this.discountPercent,
+    required this.seatsLeft,
+  });
   final String title;
   final String from;
   final String to;

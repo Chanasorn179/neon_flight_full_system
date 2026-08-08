@@ -36,7 +36,8 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<FlightProvider>();
-    final bookings = context.watch<BookingProvider>().bookings;
+    final bookingProvider = context.watch<BookingProvider>();
+    final bookings = bookingProvider.bookings;
     final user = context.watch<AuthProvider>().currentUser;
     final lang = context.watch<LanguageProvider>().languageCode;
     final upcomingBookings =
@@ -51,6 +52,13 @@ class DashboardScreen extends StatelessWidget {
     final outboundFlight = upcomingBookings.isEmpty
         ? null
         : upcomingBookings.first.flight;
+    final transferReservation = outboundFlight == null || user == null
+        ? null
+        : bookingProvider.transferBookingFor(
+            userId: user.id,
+            airportCode: outboundFlight.departure.code,
+            flightDepartureTime: outboundFlight.departureTime,
+          );
 
     return Scaffold(
       appBar: AppBar(
@@ -123,6 +131,9 @@ class DashboardScreen extends StatelessWidget {
               departureAirportCode:
                   outboundFlight?.departure.code ?? provider.from,
               flightDepartureTime: outboundFlight?.departureTime,
+              userId: user?.id ?? 'guest',
+              initialReservation: transferReservation,
+              onBooked: bookingProvider.addTransferBooking,
             ),
             const SizedBox(height: 28),
             SectionTitle(tr(lang, 'popular_destinations'), icon: Icons.public),

@@ -1,8 +1,7 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
 import '../../core/app_localizations.dart';
+import '../../models/entities.dart';
 import '../../widgets/app_widgets.dart';
 
 class AirportTransferSection extends StatefulWidget {
@@ -11,24 +10,36 @@ class AirportTransferSection extends StatefulWidget {
     required this.languageCode,
     required this.departureAirportCode,
     this.flightDepartureTime,
+    this.userId = 'guest',
+    this.initialReservation,
+    this.onBooked,
   });
 
   final String languageCode;
   final String departureAirportCode;
   final DateTime? flightDepartureTime;
+  final String userId;
+  final TransferBookingEntity? initialReservation;
+  final ValueChanged<TransferBookingEntity>? onBooked;
 
   @override
   State<AirportTransferSection> createState() => _AirportTransferSectionState();
 }
 
 class _AirportTransferSectionState extends State<AirportTransferSection> {
-  _TransferReservation? reservation;
+  TransferBookingEntity? reservation;
 
   String get languageCode => widget.languageCode;
   String get departureAirportCode => widget.departureAirportCode;
 
   String _localized(String english, String thai) =>
       languageCode == 'th' ? thai : english;
+
+  @override
+  void initState() {
+    super.initState();
+    reservation = widget.initialReservation;
+  }
 
   _TransferLocation? get _departureLocation {
     for (final location in _transferLocations) {
@@ -42,18 +53,21 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.departureAirportCode != widget.departureAirportCode ||
         oldWidget.flightDepartureTime != widget.flightDepartureTime) {
-      reservation = null;
+      reservation = widget.initialReservation;
+    } else if (oldWidget.initialReservation?.id !=
+        widget.initialReservation?.id) {
+      reservation = widget.initialReservation;
     }
   }
 
   List<_TransferVehicle> _availableVehicles(_TransferLocation location) {
-    return location.vehicles
-        .where(
-          (vehicle) =>
-              vehicle.status == _TransferStatus.available &&
-              vehicle.name != reservation?.vehicle.name,
-        )
+    final vehicles = location.vehicles
+        .where((vehicle) => vehicle.status == _TransferStatus.available)
         .toList();
+    if (reservation != null && vehicles.isNotEmpty) {
+      return vehicles.sublist(1);
+    }
+    return vehicles;
   }
 
   void _scheduleTransfer(BuildContext context, _TransferLocation location) {
@@ -73,155 +87,32 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
         .where((vehicle) => vehicle.status == _TransferStatus.available)
         .toList();
     if (availableVehicles.isEmpty) return;
-    final vehicle =
-        availableVehicles[Random().nextInt(availableVehicles.length)];
+    final createdAt = DateTime.now();
+    final booking = TransferBookingEntity(
+      id: 'NT${createdAt.millisecondsSinceEpoch}',
+      userId: widget.userId,
+      airportCode: location.code,
+      airportNameEn: location.nameEn,
+      airportNameTh: location.nameTh,
+      pickupEn: location.pickupEn,
+      pickupTh: location.pickupTh,
+      pickupTime: pickupTime,
+      flightDepartureTime: departureTime,
+      status: BookingStatus.upcoming,
+      createdAt: createdAt,
+    );
     setState(() {
-      reservation = _TransferReservation(
-        vehicle: vehicle,
-        pickupTime: pickupTime,
-        flightDepartureTime: departureTime,
-      );
+      reservation = booking;
     });
+    widget.onBooked?.call(booking);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '${tr(languageCode, 'transfer_schedule_success')}: ${vehicle.name} · '
-          '${timeOf(pickupTime)}',
+          '${tr(languageCode, 'transfer_schedule_success')} · '
+          '${tr(languageCode, 'transfer_pickup_time')}: ${timeOf(pickupTime)}',
         ),
         behavior: SnackBarBehavior.floating,
       ),
-    );
-  }
-
-  Future<void> _showVehicles(
-    BuildContext context,
-    _TransferLocation location,
-  ) async {
-    final availableVehicles = _availableVehicles(location);
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return SizedBox(
-          height: MediaQuery.sizeOf(sheetContext).height * .8,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 12, 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  tr(languageCode, 'airport_transfer'),
-                                  style: Theme.of(sheetContext)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w900),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Chip(
-                                label: Text(location.code),
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            tr(languageCode, 'transfer_service_24h'),
-                            style: TextStyle(
-                              color: Theme.of(
-                                sheetContext,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: MaterialLocalizations.of(
-                        sheetContext,
-                      ).closeButtonTooltip,
-                      onPressed: () => Navigator.pop(sheetContext),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: _PickupSummary(
-                  airport: _localized(location.nameEn, location.nameTh),
-                  pickup: _localized(location.pickupEn, location.pickupTh),
-                  availableCount: availableVehicles.length,
-                  languageCode: languageCode,
-                ),
-              ),
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                  itemCount: location.vehicles.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) => _VehicleCard(
-                    vehicle: location.vehicles[index],
-                    languageCode: languageCode,
-                    reserved:
-                        location.vehicles[index].name ==
-                        reservation?.vehicle.name,
-                  ),
-                ),
-              ),
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: availableVehicles.isEmpty
-                          ? null
-                          : () {
-                              final vehicle =
-                                  availableVehicles[Random().nextInt(
-                                    availableVehicles.length,
-                                  )];
-                              Navigator.pop(sheetContext);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '${vehicle.name} ${tr(languageCode, 'transfer_on_way')} '
-                                    '${_localized(location.pickupEn, location.pickupTh)}',
-                                  ),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
-                      icon: const Icon(Icons.local_taxi_rounded),
-                      label: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        child: Text(
-                          '${tr(languageCode, 'transfer_call_available')} '
-                          '(${availableVehicles.length} ${tr(languageCode, 'cars')})',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -339,15 +230,6 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                                 ),
                               ),
                             ),
-                            Flexible(
-                              child: Text(
-                                reservation!.vehicle.name,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
@@ -369,8 +251,9 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: reservation == null
+                  child: FilledButton.icon(
+                    key: const ValueKey('book-airport-transfer'),
+                    onPressed: reservation == null && availableCount > 0
                         ? () => _scheduleTransfer(context, location)
                         : null,
                     icon: const Icon(Icons.event_available_rounded),
@@ -393,18 +276,6 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => _showVehicles(context, location),
-                    icon: const Icon(Icons.directions_car_filled_outlined),
-                    label: Text(
-                      '${tr(languageCode, 'transfer_view_cars')} '
-                      '(${location.vehicles.length})',
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -468,8 +339,10 @@ class _PickupSummary extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              '${tr(languageCode, 'available')} $availableCount '
+              '${tr(languageCode, 'transfer_available_remaining')} '
+              '$availableCount '
               '${tr(languageCode, 'cars')}',
+              key: const ValueKey('transfer-available-count'),
               style: const TextStyle(
                 color: Colors.green,
                 fontSize: 11,
@@ -483,120 +356,7 @@ class _PickupSummary extends StatelessWidget {
   }
 }
 
-class _VehicleCard extends StatelessWidget {
-  const _VehicleCard({
-    required this.vehicle,
-    required this.languageCode,
-    this.reserved = false,
-  });
-
-  final _TransferVehicle vehicle;
-  final String languageCode;
-  final bool reserved;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final statusColor = reserved ? Colors.blue : vehicle.status.color;
-
-    return Card(
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: .55),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Icon(vehicle.icon, color: statusColor),
-                ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${vehicle.name} · ${vehicle.model}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${tr(languageCode, 'driver')} ${vehicle.driver} · '
-                        '${vehicle.plateNumber}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    reserved
-                        ? tr(languageCode, 'transfer_locked')
-                        : vehicle.status.label(languageCode),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                if (vehicle.status == _TransferStatus.available && !reserved)
-                  Text(
-                    '${vehicle.etaMinutes} ${tr(languageCode, 'minutes')} · '
-                    '${vehicle.seats} ${tr(languageCode, 'seats')}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 enum _TransferStatus { available, pickingUp, droppingOff, unavailable }
-
-extension on _TransferStatus {
-  Color get color => switch (this) {
-    _TransferStatus.available => Colors.green,
-    _TransferStatus.pickingUp || _TransferStatus.droppingOff => Colors.orange,
-    _TransferStatus.unavailable => Colors.red,
-  };
-
-  String label(String languageCode) => switch (this) {
-    _TransferStatus.available => tr(languageCode, 'available'),
-    _TransferStatus.pickingUp => tr(languageCode, 'transfer_picking_up'),
-    _TransferStatus.droppingOff => tr(languageCode, 'transfer_dropping_off'),
-    _TransferStatus.unavailable => tr(languageCode, 'unavailable'),
-  };
-}
 
 class _TransferVehicle {
   const _TransferVehicle({
@@ -618,18 +378,6 @@ class _TransferVehicle {
   final int etaMinutes;
   final _TransferStatus status;
   final IconData icon;
-}
-
-class _TransferReservation {
-  const _TransferReservation({
-    required this.vehicle,
-    required this.pickupTime,
-    required this.flightDepartureTime,
-  });
-
-  final _TransferVehicle vehicle;
-  final DateTime pickupTime;
-  final DateTime flightDepartureTime;
 }
 
 class _TransferLocation {

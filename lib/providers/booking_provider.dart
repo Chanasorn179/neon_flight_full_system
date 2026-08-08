@@ -6,6 +6,7 @@ class BookingProvider extends ChangeNotifier {
   BookingProvider(this.repository);
   final BookingRepository repository;
   List<BookingEntity> bookings = [];
+  final List<TransferBookingEntity> transferBookings = [];
   bool loading = false;
 
   Future<BookingEntity> create({
@@ -39,6 +40,37 @@ class BookingProvider extends ChangeNotifier {
     bookings.insert(0, created);
     notifyListeners();
     return created;
+  }
+
+  void addTransferBooking(TransferBookingEntity booking) {
+    final existingIndex = transferBookings.indexWhere(
+      (item) =>
+          item.userId == booking.userId &&
+          item.airportCode == booking.airportCode &&
+          item.flightDepartureTime == booking.flightDepartureTime,
+    );
+
+    if (existingIndex == -1) {
+      transferBookings.insert(0, booking);
+    } else {
+      transferBookings[existingIndex] = booking;
+    }
+    notifyListeners();
+  }
+
+  TransferBookingEntity? transferBookingFor({
+    required String userId,
+    required String airportCode,
+    required DateTime flightDepartureTime,
+  }) {
+    for (final booking in transferBookings) {
+      if (booking.userId == userId &&
+          booking.airportCode == airportCode &&
+          booking.flightDepartureTime == flightDepartureTime) {
+        return booking;
+      }
+    }
+    return null;
   }
 
   Future<void> load(String userId) async {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mini_projects/app.dart';
 import 'package:mini_projects/data/mock_api.dart';
+import 'package:mini_projects/models/entities.dart';
 import 'package:mini_projects/providers/auth_provider.dart';
 import 'package:mini_projects/providers/booking_provider.dart';
 import 'package:mini_projects/providers/flight_provider.dart';
@@ -10,6 +11,7 @@ import 'package:mini_projects/providers/settings_provider.dart';
 import 'package:mini_projects/repositories/auth_repository.dart';
 import 'package:mini_projects/repositories/booking_repository.dart';
 import 'package:mini_projects/repositories/flight_repository.dart';
+import 'package:mini_projects/screens/booking/booking_history_screen.dart';
 import 'package:mini_projects/screens/home/airport_transfer_section.dart';
 import 'package:provider/provider.dart';
 
@@ -39,7 +41,7 @@ void main() {
     expect(find.text('เข้าสู่ระบบ'), findsOneWidget);
   });
 
-  testWidgets('airport transfer shows cars and calls one available car', (
+  testWidgets('airport transfer shows availability and books directly', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 700));
@@ -60,40 +62,19 @@ void main() {
     );
 
     expect(find.text('รถบริการรับส่ง'), findsNWidgets(2));
-    expect(find.text('ว่าง 2 คัน'), findsOneWidget);
+    expect(find.text('รถว่างเหลือ 2 คัน'), findsOneWidget);
     expect(find.text('BKK'), findsOneWidget);
     expect(find.text('HKT'), findsNothing);
     expect(find.byType(ChoiceChip), findsNothing);
+    expect(find.textContaining('ดูรถ'), findsNothing);
+    expect(find.textContaining('Neon Car'), findsNothing);
+    expect(find.byType(BottomSheet), findsNothing);
 
-    await tester.tap(find.text('ดูรถทั้งหมด (5)'));
+    await tester.tap(find.byKey(const ValueKey('book-airport-transfer')));
     await tester.pumpAndSettle();
 
-    final vehicleList = find.byType(Scrollable).last;
-    await tester.scrollUntilVisible(
-      find.text('กำลังไปรับลูกค้า'),
-      120,
-      scrollable: vehicleList,
-    );
-    expect(find.text('กำลังไปรับลูกค้า'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.text('กำลังไปส่งลูกค้า'),
-      120,
-      scrollable: vehicleList,
-    );
-    expect(find.text('กำลังไปส่งลูกค้า'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.text('ไม่ว่าง'),
-      120,
-      scrollable: vehicleList,
-    );
-    expect(find.text('ไม่ว่าง'), findsOneWidget);
-
-    await tester.tap(find.text('เรียกรถว่าง (2 คัน)'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('กำลังมารับคุณที่'), findsOneWidget);
+    expect(find.text('กรุณาจองเที่ยวบินก่อนจองรถรับส่ง'), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -122,7 +103,8 @@ void main() {
     expect(find.text('BKK'), findsNothing);
     expect(find.text('สนามบินสุวรรณภูมิ'), findsNothing);
     expect(find.byType(ChoiceChip), findsNothing);
-    expect(find.text('ดูรถทั้งหมด (3)'), findsOneWidget);
+    expect(find.text('รถว่างเหลือ 2 คัน'), findsOneWidget);
+    expect(find.textContaining('ดูรถ'), findsNothing);
 
     await tester.pumpWidget(
       const MaterialApp(
@@ -145,6 +127,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    TransferBookingEntity? savedTransfer;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -155,6 +138,8 @@ void main() {
               languageCode: 'th',
               departureAirportCode: 'BKK',
               flightDepartureTime: DateTime(2030, 1, 10, 11),
+              userId: 'u1',
+              onBooked: (booking) => savedTransfer = booking,
             ),
           ),
         ),
@@ -169,15 +154,69 @@ void main() {
     await tester.tap(find.text('จองรถรับส่ง'));
     await tester.pumpAndSettle();
 
-    expect(find.text('ล็อกรถแล้ว'), findsWidgets);
+    expect(find.text('จองรถแล้ว'), findsWidgets);
     expect(find.text('เวลารับรถ: 10/01/2030 · 08:00'), findsOneWidget);
     expect(find.text('เวลาเที่ยวบิน: 10/01/2030 · 11:00'), findsOneWidget);
-    expect(find.text('ว่าง 1 คัน'), findsOneWidget);
-    expect(
-      find.text('Neon Car 01').evaluate().isNotEmpty ||
-          find.text('Neon Car 05').evaluate().isNotEmpty,
-      isTrue,
+    expect(find.text('รถว่างเหลือ 1 คัน'), findsOneWidget);
+    expect(find.textContaining('Neon Car'), findsNothing);
+    expect(savedTransfer, isNotNull);
+    expect(savedTransfer!.userId, 'u1');
+    expect(savedTransfer!.airportCode, 'BKK');
+    expect(savedTransfer!.pickupTime, DateTime(2030, 1, 10, 8));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('booking page shows airport transfer reservations', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final api = MockApi();
+    final authProvider = AuthProvider(MockAuthRepository(api))
+      ..currentUser = const UserEntity(
+        id: 'u1',
+        name: 'Aero Traveler',
+        email: 'demo@neonflight.app',
+      );
+    final bookingProvider = BookingProvider(MockBookingRepository(api))
+      ..addTransferBooking(
+        TransferBookingEntity(
+          id: 'NT203001100800',
+          userId: 'u1',
+          airportCode: 'BKK',
+          airportNameEn: 'Suvarnabhumi Airport',
+          airportNameTh: 'สนามบินสุวรรณภูมิ',
+          pickupEn: 'Level 1, Gate 4',
+          pickupTh: 'ชั้น 1 ประตู 4',
+          pickupTime: DateTime(2030, 1, 10, 8),
+          flightDepartureTime: DateTime(2030, 1, 10, 11),
+          status: BookingStatus.upcoming,
+          createdAt: DateTime(2029, 12, 1),
+        ),
+      );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: authProvider),
+          ChangeNotifierProvider.value(value: bookingProvider),
+          ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ],
+        child: const MaterialApp(home: BookingHistoryScreen()),
+      ),
     );
+    await tester.pumpAndSettle();
+
+    expect(find.text('การจองรถรับส่ง'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('transfer-booking-NT203001100800')),
+      findsOneWidget,
+    );
+    expect(find.text('รถบริการรับส่ง · BKK'), findsOneWidget);
+    expect(find.text('จุดรับปัจจุบัน: ชั้น 1 ประตู 4'), findsOneWidget);
+    expect(find.text('เวลารับรถ: 10/01/2030 · 08:00'), findsOneWidget);
+    expect(find.textContaining('Neon Car'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
