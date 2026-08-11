@@ -31,6 +31,8 @@ const LINE_CHANNEL_ACCESS_TOKEN =
   process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const LINE_DRIVER_TARGET_ID = process.env.LINE_DRIVER_TARGET_ID || '';
+const AVIATIONSTACK_API_KEY = process.env.AVIATIONSTACK_API_KEY || '';
+const AVIATIONSTACK_BASE_URL = 'https://api.aviationstack.com/v1';
 
 const addAirport = db.prepare(
   'INSERT OR IGNORE INTO airports(code,city,name) VALUES(?,?,?)',
@@ -56,7 +58,11 @@ function hasValidDispatchKey(request) {
   );
 }
 
-app.get('/api/health', (_,res)=>res.json({ok:true,service:'neon-flight-api'}));
+app.get('/api/health', (_, res) => res.json({
+  ok: true,
+  service: 'neon-flight-api',
+  aviationConfigured: Boolean(AVIATIONSTACK_API_KEY),
+}));
 app.post('/api/auth/register', (req,res)=>{
   const {name,email,password}=req.body;
   if(!name||!email||!password||password.length<6) return res.status(400).json({message:'invalid input'});
@@ -69,7 +75,97 @@ app.post('/api/auth/login', (req,res)=>{
   const token=jwt.sign({sub:u.id,email:u.email},JWT_SECRET,{expiresIn:'7d'}); res.json({token,user:{id:String(u.id),name:u.name,email:u.email}});
 });
 app.get('/api/airports', (_,res)=>res.json(db.prepare('SELECT * FROM airports ORDER BY code').all()));
-app.get('/api/flights', (req,res)=>{ const {from,to,date}=req.query; const rows=db.prepare('SELECT * FROM flights WHERE departure_code=? AND arrival_code=? AND substr(departure_time,1,10)=? ORDER BY base_price').all(from,to,date); res.json(rows); });
+app.get('/api/flights', async (req, res) => {
+  const from = String(req.query.from || '').trim().toUpperCase();
+  const to = String(req.query.to || '').trim().toUpperCase();
+  const date = String(req.query.date || '').trim();
+
+  if (!/^[A-Z]{3}$/.test(from) || !/^[A-Z]{3}$/.test(to)) {
+    return res.status(400).json({ message: 'from/to must be 3-letter IATA codes' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ message: 'date must use YYYY-MM-DD' });
+  }
+  if (!AVIATIONSTACK_API_KEY) {
+    return res.status(503).json({
+      message: 'AVIATIONSTACK_API_KEY is not configured on the backend',
+    });
+  }
+
+  const url = new URL(`${AVIATIONSTACK_BASE_URL}/flights`);
+  url.searchParams.set('access_key', AVIATIONSTACK_API_KEY);
+  url.searchParams.set('dep_iata', from);
+  url.searchParams.set('arr_iata', to);
+  url.searchParams.set('flight_date', date);
+  url.searchParams.set('limit', '50');
+
+  try {
+    const upstream = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = await upstream.json();
+
+    if (!upstream.ok || body.error) {
+      const message =
+        body?.error?.message || body?.message || `Aviationstack HTTP ${upstream.status}`;
+      return res.status(502).json({ message });
+    }
+
+    const rows = Array.isArray(body.data) ? body.data : [];
+    const normalized = rows
+      .map((item) => normalizeAviationFlight(item))
+      .filter(Boolean);
+
+    return res.json(normalized);
+  } catch (error) {
+    console.error('Aviationstack request failed:', error.message);
+    return res.status(502).json({
+      message: 'Unable to retrieve live flight data from Aviationstack',
+    });
+  }
+});
+function normalizeAviationFlight(item) {
+  const departure = item?.departure || {};
+  const arrival = item?.arrival || {};
+  const airline = item?.airline || {};
+  const flight = item?.flight || {};
+
+  const departureTime = departure.scheduled || departure.estimated || departure.actual;
+  const arrivalTime = arrival.scheduled || arrival.estimated || arrival.actual;
+  const departureCode = departure.iata || '';
+  const arrivalCode = arrival.iata || '';
+  const flightNumber = flight.iata || flight.icao || flight.number || '';
+
+  if (!departureTime || !arrivalTime || !departureCode || !arrivalCode) {
+    return null;
+  }
+
+  const hashSource = `${flightNumber}|${departureTime}|${departureCode}|${arrivalCode}`;
+  const hash = crypto.createHash('sha256').update(hashSource).digest('hex');
+  const priceSeed = parseInt(hash.slice(0, 6), 16);
+  const seatSeed = parseInt(hash.slice(6, 10), 16);
+
+  return {
+    id: `${flightNumber || 'FLIGHT'}_${hash.slice(0, 12)}`,
+    airline: airline.name || airline.iata || 'Airline',
+    flightNumber: flightNumber || 'N/A',
+    departureCode,
+    arrivalCode,
+    departureTime,
+    arrivalTime,
+    status: item?.flight_status || 'scheduled',
+    departureTerminal: departure.terminal || null,
+    departureGate: departure.gate || null,
+    arrivalTerminal: arrival.terminal || null,
+    arrivalGate: arrival.gate || null,
+    dataSource: 'aviationstack',
+    pricingSource: 'demo',
+    basePrice: 1800 + (priceSeed % 2200),
+    availableSeats: 5 + (seatSeed % 35),
+  };
+}
+
 app.get('/api/promotions', (_,res)=>res.json(db.prepare('SELECT * FROM promotions').all()));
 app.get('/api/bookings/:userId', (req,res)=>res.json(db.prepare('SELECT * FROM bookings WHERE user_id=? ORDER BY created_at DESC').all(req.params.userId)));
 

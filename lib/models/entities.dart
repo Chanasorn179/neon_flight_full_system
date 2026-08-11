@@ -25,6 +25,12 @@ extension CabinClassX on CabinClass {
     CabinClass.business => 2.8,
     CabinClass.first => 4.6,
   };
+  double get seatFee => switch (this) {
+    CabinClass.economy => 200,
+    CabinClass.premiumEconomy => 350,
+    CabinClass.business => 800,
+    CabinClass.first => 1500,
+  };
 }
 
 class UserEntity {
@@ -197,4 +203,36 @@ class PromotionEntity {
   final CabinClass cabinClass;
   final int discountPercent;
   final int seatsLeft;
+}
+
+enum SavedPaymentType { promptPay, card, mobileBanking }
+
+class SavedPaymentMethodEntity {
+  const SavedPaymentMethodEntity({
+    required this.id,
+    required this.type,
+    required this.label,
+    required this.detail,
+  });
+  final String id;
+  final SavedPaymentType type;
+  final String label;
+  final String detail;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': type.name,
+        'label': label,
+        'detail': detail,
+      };
+
+  factory SavedPaymentMethodEntity.fromJson(Map<String, dynamic> json) => SavedPaymentMethodEntity(
+        id: json['id']?.toString() ?? '',
+        type: SavedPaymentType.values.firstWhere(
+          (e) => e.name == json['type'],
+          orElse: () => SavedPaymentType.card,
+        ),
+        label: json['label']?.toString() ?? '',
+        detail: json['detail']?.toString() ?? '',
+      );
 }

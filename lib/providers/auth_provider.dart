@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/entities.dart';
 import '../repositories/auth_repository.dart';
+import '../services/firebase_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider(this.repository);
@@ -12,14 +13,14 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> login(String email, String password) async {
     loading = true; error = null; notifyListeners();
-    try { currentUser = await repository.login(email, password); return true; }
+    try { currentUser = await repository.login(email, password); final u = currentUser!; await FirebaseService.saveUser(id: u.id, name: u.name, email: u.email); return true; }
     catch (e) { error = e.toString().replaceFirst('Exception: ', ''); return false; }
     finally { loading = false; notifyListeners(); }
   }
 
   Future<bool> register(String name, String email, String password) async {
     loading = true; error = null; notifyListeners();
-    try { currentUser = await repository.register(name, email, password); return true; }
+    try { currentUser = await repository.register(name, email, password); final u = currentUser!; await FirebaseService.saveUser(id: u.id, name: u.name, email: u.email); return true; }
     catch (e) { error = e.toString().replaceFirst('Exception: ', ''); return false; }
     finally { loading = false; notifyListeners(); }
   }

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0d3b73">
+  <title>NEON FLIGHT — ตรวจสอบ E‑Ticket</title>
+  <style>
+    :root{
+      color-scheme:light;
+      --blue:#416b9f;
+      --blue-dark:#173b66;
+      --ink:#1d2129;
+      --muted:#667085;
+      --line:#e4e7ec;
+      --bg:#f5f7fb;
+      --card:#fff;
+      --ok:#128a52;
+      --bad:#c93636;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family:system-ui,-apple-system,"Segoe UI","Noto Sans Thai",sans-serif;
+      color:var(--ink);
+      background:linear-gradient(180deg,#edf3fb 0,#f8f9fc 45%,#fff 100%);
+    }
+    main{max-width:520px;margin:0 auto;padding:28px 18px 48px}
+    .brand{text-align:center;margin:24px 0}
+    .plane{font-size:44px;color:#0871ce;line-height:1}
+    h1{font-size:22px;margin:5px 0 0}
+    .card{
+      background:var(--card);
+      border:1px solid rgba(23,59,102,.08);
+      box-shadow:0 18px 48px rgba(37,55,84,.11);
+      border-radius:24px;
+      padding:24px;
+    }
+    .state{text-align:center;padding:8px 0 20px}
+    .icon{
+      width:72px;height:72px;border-radius:50%;
+      display:grid;place-items:center;margin:0 auto 14px;
+      font-size:38px;font-weight:800
+    }
+    .icon.loading{background:#eaf1fa;color:var(--blue)}
+    .icon.ok{background:#e8f7ef;color:var(--ok)}
+    .icon.bad{background:#fdecec;color:var(--bad)}
+    h2{margin:0 0 6px;font-size:24px}
+    .muted{color:var(--muted);font-size:14px;line-height:1.55}
+    .route{
+      display:flex;align-items:center;justify-content:space-between;
+      font-weight:900;font-size:30px;padding:20px 0 18px;
+      border-top:1px solid var(--line);border-bottom:1px solid var(--line)
+    }
+    .arrow{font-size:22px;color:var(--muted)}
+    .rows{padding-top:14px}
+    .row{display:flex;gap:18px;padding:7px 0}
+    .label{flex:1;color:var(--muted)}
+    .value{flex:1;text-align:right;font-weight:700;word-break:break-word}
+    .badge{
+      display:inline-flex;align-items:center;gap:7px;
+      border-radius:999px;padding:8px 12px;font-weight:800;font-size:13px
+    }
+    .badge.ok{background:#e8f7ef;color:var(--ok)}
+    .badge.bad{background:#fdecec;color:var(--bad)}
+    footer{text-align:center;color:var(--muted);font-size:12px;margin-top:18px}
+    [hidden]{display:none!important}
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <div class="plane">✈</div>
+    <h1>NEON FLIGHT</h1>
+  </div>
+
+  <section class="card">
+    <div id="loading" class="state">
+      <div class="icon loading">…</div>
+      <h2>กำลังตรวจสอบตั๋ว</h2>
+      <div class="muted">กำลังตรวจสอบข้อมูลกับ Cloud Firestore</div>
+    </div>
+
+    <div id="invalid" class="state" hidden>
+      <div class="icon bad">×</div>
+      <h2>ตั๋วไม่ถูกต้อง</h2>
+      <div id="invalidMessage" class="muted"></div>
+    </div>
+
+    <div id="valid" hidden>
+      <div class="state">
+        <div id="validIcon" class="icon ok">✓</div>
+        <h2 id="validTitle">E‑Ticket ถูกต้อง</h2>
+        <span id="statusBadge" class="badge ok">VALID</span>
+      </div>
+
+      <div class="route">
+        <span id="from">—</span>
+        <span class="arrow">→</span>
+        <span id="to">—</span>
+      </div>
+
+      <div class="rows">
+        <div class="row"><div class="label">Booking ID</div><div id="bookingId" class="value">—</div></div>
+        <div class="row"><div class="label">ผู้โดยสาร</div><div id="passenger" class="value">—</div></div>
+        <div class="row"><div class="label">เที่ยวบิน</div><div id="flight" class="value">—</div></div>
+        <div class="row"><div class="label">ที่นั่ง</div><div id="seats" class="value">—</div></div>
+        <div class="row"><div class="label">ชั้นโดยสาร</div><div id="cabin" class="value">—</div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>ข้อมูลนี้ใช้สำหรับตรวจสอบ E‑Ticket ของ NEON FLIGHT</footer>
+</main>
+
+<script src="/__/firebase/8.10.1/firebase-app.js"></script>
+<script src="/__/firebase/8.10.1/firebase-firestore.js"></script>
+<script src="/__/firebase/init.js"></script>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function fail(message) {
+    $('loading').hidden = true;
+    $('valid').hidden = true;
+    $('invalid').hidden = false;
+    $('invalidMessage').textContent = message;
+  }
+
+  async function verifyTicket() {
+    try {
+      const parts = location.pathname.split('/').filter(Boolean);
+      const bookingId = parts.length === 2 && parts[0] === 't'
+        ? decodeURIComponent(parts[1])
+        : '';
+      const token = (new URLSearchParams(location.search).get('token') || '')
+        .trim()
+        .toUpperCase();
+
+      if (!/^NF[A-Z0-9_-]+$/i.test(bookingId) || !/^[A-F0-9]{12}$/.test(token)) {
+        fail('ลิงก์ตรวจสอบตั๋วไม่สมบูรณ์');
+        return;
+      }
+
+      const documentId = `${bookingId}_${token}`;
+      const snap = await firebase
+        .firestore()
+        .collection('publicTickets')
+        .doc(documentId)
+        .get();
+
+      if (!snap.exists) {
+        fail('ไม่พบตั๋วนี้ในระบบ หรือรหัสตรวจสอบไม่ถูกต้อง');
+        return;
+      }
+
+      const ticket = snap.data();
+      const status = String(ticket.status || '').toLowerCase();
+
+      $('loading').hidden = true;
+      $('invalid').hidden = true;
+      $('valid').hidden = false;
+
+      $('bookingId').textContent = ticket.bookingId || bookingId;
+      $('passenger').textContent = ticket.passengerName || '—';
+      $('flight').textContent = ticket.flightNumber || '—';
+      $('from').textContent = ticket.departureCode || '—';
+      $('to').textContent = ticket.arrivalCode || '—';
+      $('seats').textContent = Array.isArray(ticket.seats)
+        ? ticket.seats.join(', ')
+        : '—';
+      $('cabin').textContent = ticket.cabinClass || '—';
+
+      const badge = $('statusBadge');
+      const icon = $('validIcon');
+
+      if (status === 'cancelled') {
+        $('validTitle').textContent = 'ตั๋วถูกยกเลิก';
+        badge.textContent = 'CANCELLED';
+        badge.className = 'badge bad';
+        icon.className = 'icon bad';
+        icon.textContent = '×';
+      } else {
+        $('validTitle').textContent = 'E‑Ticket ถูกต้อง';
+        badge.textContent = 'VALID';
+        badge.className = 'badge ok';
+        icon.className = 'icon ok';
+        icon.textContent = '✓';
+      }
+    } catch (error) {
+      console.error(error);
+      fail('เชื่อมต่อระบบตรวจสอบตั๋วไม่สำเร็จ กรุณาลองใหม่');
+    }
+  }
+
+  verifyTicket();
+</script>
+</body>
+</html>

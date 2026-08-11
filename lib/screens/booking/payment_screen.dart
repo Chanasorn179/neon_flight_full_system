@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/app_localizations.dart';
 import '../../models/entities.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/booking_provider.dart';
 import '../../providers/language_provider.dart';
+import '../../services/promptpay_service.dart';
 import '../../widgets/app_widgets.dart';
 import 'ticket_screen.dart';
 
@@ -35,31 +37,44 @@ class _PaymentScreenState extends State<PaymentScreen> {
         fare: widget.flight.price(widget.cabinClass) * widget.passengers.length,
         tax: 700 * widget.passengers.length.toDouble(),
         service: 150 * widget.passengers.length.toDouble(),
-        seatFee: widget.seats.length * 200,
+        seatFee: widget.seats.length * widget.cabinClass.seatFee,
       );
 
   Future<void> pay() async {
+    if (method == PaymentMethod.promptPay && !PromptPayService.configured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ยังไม่ได้ตั้ง PROMPTPAY_ID จึงยังสร้าง QR รับเงินจริงไม่ได้')),
+      );
+      return;
+    }
     setState(() => paying = true);
-    final user = context.read<AuthProvider>().currentUser!;
-    final booking = await context.read<BookingProvider>().create(
-          userId: user.id,
-          flight: widget.flight,
-          cabinClass: widget.cabinClass,
-          passengers: widget.passengers,
-          seats: widget.seats,
-          paymentMethod: method,
-        );
-    if (!mounted) return;
-    setState(() => paying = false);
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => TicketScreen(booking: booking)),
-      (route) => route.isFirst,
-    );
+    try {
+      final user = context.read<AuthProvider>().currentUser!;
+      final booking = await context.read<BookingProvider>().create(
+            userId: user.id,
+            flight: widget.flight,
+            cabinClass: widget.cabinClass,
+            passengers: widget.passengers,
+            seats: widget.seats,
+            paymentMethod: method,
+          );
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => TicketScreen(booking: booking)),
+        (route) => route.isFirst,
+      );
+    } finally {
+      if (mounted) setState(() => paying = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<LanguageProvider>().languageCode;
+    final promptPayPayload = PromptPayService.configured
+        ? PromptPayService.payload(amount: fare.total)
+        : null;
+
     return Scaffold(
       appBar: AppBar(title: Text(tr(lang, 'payment'))),
       body: ListView(
@@ -102,8 +117,24 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 padding: const EdgeInsets.all(18),
                 child: Column(
                   children: [
-                    const Icon(Icons.qr_code_2, size: 120),
-                    Text(tr(lang, 'scan_promptpay')),
+                    if (promptPayPayload != null)
+                      Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.all(10),
+                        child: QrImageView(data: promptPayPayload, size: 190, backgroundColor: Colors.white),
+                      )
+                    else
+                      Container(
+                        width: 190,
+                        height: 190,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: const Center(child: Icon(Icons.qr_code_2_rounded, size: 110)),
+                      ),
+                    const SizedBox(height: 10),
+                    Text(promptPayPayload != null ? 'สแกน QR PromptPay เพื่อชำระเงินจริง' : 'ตั้ง PROMPTPAY_ID ก่อนเพื่อสร้าง QR รับเงินจริง'),
                     Text(money(fare.total), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
                   ],
                 ),
@@ -137,6 +168,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 : const Icon(Icons.lock),
             label: Padding(padding: const EdgeInsets.all(14), child: Text(tr(lang, 'confirm_pay'))),
           ),
+          if (method != PaymentMethod.promptPay) ...[
+            const SizedBox(height: 8),
+            Text(
+              'หมายเหตุ: บัตรและ Mobile Banking ยังเป็น UI จนกว่าจะเชื่อม payment gateway ของผู้ให้บริการจริง',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ],
       ),
     );
@@ -155,7 +194,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
 class _CardFields extends StatelessWidget {
   const _CardFields();
-
   @override
   Widget build(BuildContext context) => const Card(
         child: Padding(
@@ -180,7 +218,6 @@ class _CardFields extends StatelessWidget {
 class _BankInfo extends StatelessWidget {
   const _BankInfo({required this.lang});
   final String lang;
-
   @override
   Widget build(BuildContext context) => Card(
         child: ListTile(

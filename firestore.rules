@@ -1,0 +1,94 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read, create, update, delete: if ownsUser(userId);
+
+      match /savedPassengers/{passengerId} {
+        allow read, create, update, delete: if ownsUser(userId);
+      }
+
+      // Only sanitized display metadata is allowed here.
+      // Never store PAN/full card, CVV, PIN, OTP, bank password,
+      // bank account number, or payer PromptPay ID.
+      match /paymentMethods/{methodId} {
+        allow read, delete: if ownsUser(userId);
+
+        allow create, update:
+          if ownsUser(userId)
+          && request.resource.data.keys().hasOnly([
+            'id',
+            'type',
+            'label',
+            'detail',
+            'updatedAt'
+          ])
+          && request.resource.data.id == methodId
+          && request.resource.data.type in [
+            'promptPay',
+            'card',
+            'mobileBanking'
+          ]
+          && request.resource.data.label is string
+          && request.resource.data.detail is string
+          && request.resource.data.label.size() <= 40
+          && request.resource.data.detail.size() <= 60
+          && (
+            request.resource.data.type != 'promptPay'
+            || request.resource.data.detail == 'สแกน QR เพื่อชำระเงิน'
+          )
+          && (
+            request.resource.data.type != 'card'
+            || !request.resource.data.detail.matches('.*[0-9]{6,}.*')
+          )
+          && (
+            request.resource.data.type != 'mobileBanking'
+            || !request.resource.data.detail.matches('.*[0-9]{6,}.*')
+          );
+      }
+    }
+
+    match /bookings/{bookingId} {
+      allow create:
+        if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow read, update, delete:
+        if signedIn()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // Public E-ticket verification by exact, tokenized document ID.
+    // Collection listing is denied.
+    match /publicTickets/{ticketId} {
+      allow get: if true;
+      allow list: if false;
+
+      allow create:
+        if signedIn()
+        && get(
+          /databases/$(database)/documents/bookings/$(request.resource.data.bookingId)
+        ).data.userId == request.auth.uid;
+
+      allow update, delete:
+        if signedIn()
+        && get(
+          /databases/$(database)/documents/bookings/$(resource.data.bookingId)
+        ).data.userId == request.auth.uid;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

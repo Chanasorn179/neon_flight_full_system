@@ -62,3 +62,19 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase local cache
+.firebase/
+
+# Local backup files
+*.backup_*
+*.mojibake_backup_*
+
+# Temporary repair scripts
+FIX_*.ps1
+REPAIR_*.ps1
+
+# Local DevTools config
+devtools_options.yaml
+
+SETUP_5_6.md
