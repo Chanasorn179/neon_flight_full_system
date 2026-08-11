@@ -1,0 +1,13 @@
+{
+  "name": "neon-flight-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {"dev": "node server.js", "start": "node server.js"},
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "better-sqlite3": "^12.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
