@@ -140,6 +140,11 @@ void main() {
               flightDepartureTime: DateTime(2030, 1, 10, 11),
               userId: 'u1',
               onBooked: (booking) => savedTransfer = booking,
+              gpsLocationLoader: () async => const GpsLocationEntity(
+                latitude: 13.69,
+                longitude: 100.75,
+                accuracyMeters: 8,
+              ),
             ),
           ),
         ),
@@ -151,7 +156,19 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('จองรถรับส่ง'));
+    expect(find.textContaining('ยังไม่ได้ระบุตำแหน่ง'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('locate-airport-transfer')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('13.690000, 100.750000 · ความแม่นยำ ±8 m'),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('book-airport-transfer')),
+    );
+    await tester.tap(find.byKey(const ValueKey('book-airport-transfer')));
     await tester.pumpAndSettle();
 
     expect(find.text('จองรถแล้ว'), findsWidgets);
@@ -163,6 +180,140 @@ void main() {
     expect(savedTransfer!.userId, 'u1');
     expect(savedTransfer!.airportCode, 'BKK');
     expect(savedTransfer!.pickupTime, DateTime(2030, 1, 10, 8));
+    expect(savedTransfer!.pickupLocation.latitude, 13.69);
+    expect(savedTransfer!.pickupLocation.longitude, 100.75);
+    expect(savedTransfer!.distanceToAirportKm, lessThanOrEqualTo(20));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('airport transfer rejects GPS farther than 20 km', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 850));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    TransferBookingEntity? savedTransfer;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: AirportTransferSection(
+              languageCode: 'en',
+              departureAirportCode: 'BKK',
+              flightDepartureTime: DateTime(2030, 1, 10, 11),
+              userId: 'u1',
+              onBooked: (booking) => savedTransfer = booking,
+              gpsLocationLoader: () async => const GpsLocationEntity(
+                latitude: 13.914372,
+                longitude: 100.605692,
+                accuracyMeters: 8,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('book-airport-transfer')),
+    );
+    await tester.tap(find.byKey(const ValueKey('book-airport-transfer')));
+    await tester.pumpAndSettle();
+
+    expect(savedTransfer, isNull);
+    expect(find.textContaining('Outside the service area'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('transfer-service-area-status')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('airport transfer accepts Don Mueang GPS for DMK', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 850));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    TransferBookingEntity? savedTransfer;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: AirportTransferSection(
+              languageCode: 'en',
+              departureAirportCode: 'DMK',
+              flightDepartureTime: DateTime(2030, 1, 10, 11),
+              userId: 'u1',
+              driverNotificationEnabled: true,
+              onBooked: (booking) async => savedTransfer = booking,
+              gpsLocationLoader: () async => const GpsLocationEntity(
+                latitude: 13.914372,
+                longitude: 100.605692,
+                accuracyMeters: 8,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('book-airport-transfer')),
+    );
+    await tester.tap(find.byKey(const ValueKey('book-airport-transfer')));
+    await tester.pumpAndSettle();
+
+    expect(savedTransfer, isNotNull);
+    expect(savedTransfer!.airportCode, 'DMK');
+    expect(savedTransfer!.distanceToAirportKm, lessThan(0.1));
+    expect(find.text('Transfer booked'), findsWidgets);
+    expect(find.textContaining('Driver notified through LINE'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('transfer stays booked when LINE notification fails', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 850));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: AirportTransferSection(
+              languageCode: 'en',
+              departureAirportCode: 'DMK',
+              flightDepartureTime: DateTime(2030, 1, 10, 11),
+              userId: 'u1',
+              driverNotificationEnabled: true,
+              onBooked: (_) async => throw Exception('LINE unavailable'),
+              gpsLocationLoader: () async => const GpsLocationEntity(
+                latitude: 13.914372,
+                longitude: 100.605692,
+                accuracyMeters: 8,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('book-airport-transfer')),
+    );
+    await tester.tap(find.byKey(const ValueKey('book-airport-transfer')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Transfer booked'), findsWidgets);
+    expect(
+      find.textContaining('Driver could not be notified through LINE'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -189,6 +340,12 @@ void main() {
           airportNameTh: 'สนามบินสุวรรณภูมิ',
           pickupEn: 'Level 1, Gate 4',
           pickupTh: 'ชั้น 1 ประตู 4',
+          pickupLocation: const GpsLocationEntity(
+            latitude: 13.69,
+            longitude: 100.75,
+            accuracyMeters: 8,
+          ),
+          distanceToAirportKm: 1.1,
           pickupTime: DateTime(2030, 1, 10, 8),
           flightDepartureTime: DateTime(2030, 1, 10, 11),
           status: BookingStatus.upcoming,
@@ -214,7 +371,13 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('รถบริการรับส่ง · BKK'), findsOneWidget);
-    expect(find.text('จุดรับปัจจุบัน: ชั้น 1 ประตู 4'), findsOneWidget);
+    expect(
+      find.text(
+        'ตำแหน่ง GPS ปัจจุบัน: '
+        '13.690000, 100.750000 · ความแม่นยำ ±8 m',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('เวลารับรถ: 10/01/2030 · 08:00'), findsOneWidget);
     expect(find.textContaining('Neon Car'), findsNothing);
     expect(tester.takeException(), isNull);

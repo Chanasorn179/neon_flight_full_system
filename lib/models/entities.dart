@@ -138,6 +138,18 @@ class BookingEntity {
   final DateTime createdAt;
 }
 
+class GpsLocationEntity {
+  const GpsLocationEntity({
+    required this.latitude,
+    required this.longitude,
+    required this.accuracyMeters,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double accuracyMeters;
+}
+
 class TransferBookingEntity {
   const TransferBookingEntity({
     required this.id,
@@ -147,6 +159,8 @@ class TransferBookingEntity {
     required this.airportNameTh,
     required this.pickupEn,
     required this.pickupTh,
+    required this.pickupLocation,
+    required this.distanceToAirportKm,
     required this.pickupTime,
     required this.flightDepartureTime,
     required this.status,
@@ -160,6 +174,8 @@ class TransferBookingEntity {
   final String airportNameTh;
   final String pickupEn;
   final String pickupTh;
+  final GpsLocationEntity pickupLocation;
+  final double distanceToAirportKm;
   final DateTime pickupTime;
   final DateTime flightDepartureTime;
   final BookingStatus status;

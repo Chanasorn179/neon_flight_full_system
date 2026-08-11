@@ -7,9 +7,12 @@ import '../../providers/auth_provider.dart';
 import '../../providers/booking_provider.dart';
 import '../../providers/flight_provider.dart';
 import '../../providers/language_provider.dart';
+import '../../services/transfer_dispatch_service.dart';
 import '../../widgets/app_widgets.dart';
 import '../flights/flight_results_screen.dart';
 import 'airport_transfer_section.dart';
+
+final _transferDispatchService = TransferDispatchService();
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -49,9 +52,14 @@ class DashboardScreen extends StatelessWidget {
               second.flight.departureTime,
             ),
           );
-    final outboundFlight = upcomingBookings.isEmpty
+    final outboundBooking = upcomingBookings.isEmpty
         ? null
-        : upcomingBookings.first.flight;
+        : upcomingBookings.first;
+    final outboundFlight = outboundBooking?.flight;
+    final transferPassenger =
+        outboundBooking == null || outboundBooking.passengers.isEmpty
+        ? null
+        : outboundBooking.passengers.first;
     final transferReservation = outboundFlight == null || user == null
         ? null
         : bookingProvider.transferBookingFor(
@@ -133,7 +141,16 @@ class DashboardScreen extends StatelessWidget {
               flightDepartureTime: outboundFlight?.departureTime,
               userId: user?.id ?? 'guest',
               initialReservation: transferReservation,
-              onBooked: bookingProvider.addTransferBooking,
+              driverNotificationEnabled: true,
+              onBooked: (booking) async {
+                bookingProvider.addTransferBooking(booking);
+                await _transferDispatchService.notifyDriver(
+                  booking: booking,
+                  passengerName:
+                      transferPassenger?.fullName ?? user?.name ?? '',
+                  passengerPhone: transferPassenger?.phone ?? '',
+                );
+              },
             ),
             const SizedBox(height: 28),
             SectionTitle(tr(lang, 'popular_destinations'), icon: Icons.public),

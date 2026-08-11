@@ -6,3 +6,15 @@ CREATE TABLE IF NOT EXISTS promotions (id INTEGER PRIMARY KEY AUTOINCREMENT, tit
 CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), flight_id INTEGER NOT NULL REFERENCES flights(id), cabin_class TEXT NOT NULL, payment_method TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'upcoming', total REAL NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS passengers (id INTEGER PRIMARY KEY AUTOINCREMENT, booking_id TEXT NOT NULL REFERENCES bookings(id), title TEXT, first_name TEXT NOT NULL, last_name TEXT NOT NULL, birth_date TEXT, nationality TEXT, passport_number TEXT, passport_expiry TEXT, phone TEXT, email TEXT);
 CREATE TABLE IF NOT EXISTS booking_seats (booking_id TEXT NOT NULL REFERENCES bookings(id), seat TEXT NOT NULL, PRIMARY KEY (booking_id, seat));
+CREATE TABLE IF NOT EXISTS transfer_bookings (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  passenger_name TEXT NOT NULL,
+  passenger_phone TEXT NOT NULL,
+  pickup_latitude REAL NOT NULL,
+  pickup_longitude REAL NOT NULL,
+  notification_status TEXT NOT NULL DEFAULT 'pending',
+  notification_error TEXT,
+  line_notified_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

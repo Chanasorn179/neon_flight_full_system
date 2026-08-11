@@ -1,8 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../core/app_localizations.dart';
 import '../../models/entities.dart';
 import '../../widgets/app_widgets.dart';
+
+typedef GpsLocationLoader = Future<GpsLocationEntity> Function();
+typedef TransferBookingCallback =
+    FutureOr<void> Function(TransferBookingEntity booking);
+
+const double _transferServiceRadiusKm = 20;
 
 class AirportTransferSection extends StatefulWidget {
   const AirportTransferSection({
@@ -13,6 +22,8 @@ class AirportTransferSection extends StatefulWidget {
     this.userId = 'guest',
     this.initialReservation,
     this.onBooked,
+    this.driverNotificationEnabled = false,
+    this.gpsLocationLoader,
   });
 
   final String languageCode;
@@ -20,7 +31,9 @@ class AirportTransferSection extends StatefulWidget {
   final DateTime? flightDepartureTime;
   final String userId;
   final TransferBookingEntity? initialReservation;
-  final ValueChanged<TransferBookingEntity>? onBooked;
+  final TransferBookingCallback? onBooked;
+  final bool driverNotificationEnabled;
+  final GpsLocationLoader? gpsLocationLoader;
 
   @override
   State<AirportTransferSection> createState() => _AirportTransferSectionState();
@@ -28,6 +41,9 @@ class AirportTransferSection extends StatefulWidget {
 
 class _AirportTransferSectionState extends State<AirportTransferSection> {
   TransferBookingEntity? reservation;
+  GpsLocationEntity? currentLocation;
+  bool locating = false;
+  String? locationErrorKey;
 
   String get languageCode => widget.languageCode;
   String get departureAirportCode => widget.departureAirportCode;
@@ -39,6 +55,7 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
   void initState() {
     super.initState();
     reservation = widget.initialReservation;
+    currentLocation = reservation?.pickupLocation;
   }
 
   _TransferLocation? get _departureLocation {
@@ -54,9 +71,12 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     if (oldWidget.departureAirportCode != widget.departureAirportCode ||
         oldWidget.flightDepartureTime != widget.flightDepartureTime) {
       reservation = widget.initialReservation;
+      currentLocation = reservation?.pickupLocation;
+      locationErrorKey = null;
     } else if (oldWidget.initialReservation?.id !=
         widget.initialReservation?.id) {
       reservation = widget.initialReservation;
+      currentLocation = reservation?.pickupLocation;
     }
   }
 
@@ -70,12 +90,120 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     return vehicles;
   }
 
-  void _scheduleTransfer(BuildContext context, _TransferLocation location) {
+  double _distanceToAirportKm(
+    _TransferLocation airport,
+    GpsLocationEntity location,
+  ) {
+    return Geolocator.distanceBetween(
+          location.latitude,
+          location.longitude,
+          airport.latitude,
+          airport.longitude,
+        ) /
+        1000;
+  }
+
+  Future<GpsLocationEntity> _loadGpsLocation() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      throw const _GpsLocationException('gps_service_disabled');
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied) {
+      throw const _GpsLocationException('gps_permission_denied');
+    }
+    if (permission == LocationPermission.deniedForever) {
+      throw const _GpsLocationException('gps_permission_denied_forever');
+    }
+
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 20),
+      ),
+    );
+    return GpsLocationEntity(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracyMeters: position.accuracy,
+    );
+  }
+
+  Future<GpsLocationEntity?> _locateCurrentPosition() async {
+    if (locating) return null;
+    setState(() {
+      locating = true;
+      locationErrorKey = null;
+    });
+
+    try {
+      final loader = widget.gpsLocationLoader ?? _loadGpsLocation;
+      final location = await loader();
+      if (!mounted) return null;
+      setState(() {
+        currentLocation = location;
+        locating = false;
+      });
+      return location;
+    } on _GpsLocationException catch (error) {
+      if (!mounted) return null;
+      setState(() {
+        locating = false;
+        locationErrorKey = error.messageKey;
+      });
+      return null;
+    } catch (_) {
+      if (!mounted) return null;
+      setState(() {
+        locating = false;
+        locationErrorKey = 'gps_location_failed';
+      });
+      return null;
+    }
+  }
+
+  Future<void> _scheduleTransfer(
+    BuildContext context,
+    _TransferLocation location,
+  ) async {
     final departureTime = widget.flightDepartureTime;
     if (departureTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(tr(languageCode, 'transfer_ticket_required')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final pickupLocation = currentLocation ?? await _locateCurrentPosition();
+    if (!context.mounted) return;
+    if (pickupLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(tr(languageCode, 'gps_required')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final distanceToAirportKm = _distanceToAirportKm(location, pickupLocation);
+    if (distanceToAirportKm > _transferServiceRadiusKm) {
+      setState(() {
+        locationErrorKey = 'gps_outside_service_area';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${tr(languageCode, 'gps_outside_service_area')} '
+            '(${distanceToAirportKm.toStringAsFixed(1)} km)',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -96,6 +224,8 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
       airportNameTh: location.nameTh,
       pickupEn: location.pickupEn,
       pickupTh: location.pickupTh,
+      pickupLocation: pickupLocation,
+      distanceToAirportKm: distanceToAirportKm,
       pickupTime: pickupTime,
       flightDepartureTime: departureTime,
       status: BookingStatus.upcoming,
@@ -104,12 +234,22 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     setState(() {
       reservation = booking;
     });
-    widget.onBooked?.call(booking);
+    var driverNotificationFailed = false;
+    try {
+      await widget.onBooked?.call(booking);
+    } catch (_) {
+      driverNotificationFailed = true;
+    }
+    if (!context.mounted) return;
+    final notificationMessage = !widget.driverNotificationEnabled
+        ? ''
+        : ' · ${tr(languageCode, driverNotificationFailed ? 'transfer_line_notification_failed' : 'transfer_line_notification_success')}';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           '${tr(languageCode, 'transfer_schedule_success')} · '
-          '${tr(languageCode, 'transfer_pickup_time')}: ${timeOf(pickupTime)}',
+          '${tr(languageCode, 'transfer_pickup_time')}: '
+          '${timeOf(pickupTime)}$notificationMessage',
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -123,6 +263,12 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     if (location == null) return const SizedBox.shrink();
 
     final availableCount = _availableVehicles(location).length;
+    final distanceToAirportKm = currentLocation == null
+        ? null
+        : _distanceToAirportKm(location, currentLocation!);
+    final isWithinServiceArea =
+        distanceToAirportKm == null ||
+        distanceToAirportKm <= _transferServiceRadiusKm;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,10 +345,57 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                 const SizedBox(height: 12),
                 _PickupSummary(
                   airport: _localized(location.nameEn, location.nameTh),
-                  pickup: _localized(location.pickupEn, location.pickupTh),
+                  pickup: currentLocation == null
+                      ? tr(languageCode, 'gps_location_not_set')
+                      : _gpsLocationText(currentLocation!, languageCode),
                   availableCount: availableCount,
                   languageCode: languageCode,
                 ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('locate-airport-transfer'),
+                    onPressed: reservation == null && !locating
+                        ? _locateCurrentPosition
+                        : null,
+                    icon: locating
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location_rounded),
+                    label: Text(
+                      tr(
+                        languageCode,
+                        locating
+                            ? 'gps_locating'
+                            : currentLocation == null
+                            ? 'gps_use_current_location'
+                            : 'gps_refresh_location',
+                      ),
+                    ),
+                  ),
+                ),
+                if (distanceToAirportKm != null) ...[
+                  const SizedBox(height: 8),
+                  _ServiceAreaStatus(
+                    distanceToAirportKm: distanceToAirportKm,
+                    isWithinServiceArea: isWithinServiceArea,
+                    languageCode: languageCode,
+                  ),
+                ],
+                if (locationErrorKey != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      tr(languageCode, locationErrorKey!),
+                      key: const ValueKey('gps-location-error'),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  ),
                 if (reservation != null) ...[
                   const SizedBox(height: 12),
                   Container(
@@ -234,6 +427,10 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                         ),
                         const SizedBox(height: 8),
                         Text(
+                          '${tr(languageCode, 'gps_current_location')}: '
+                          '${_gpsLocationText(reservation!.pickupLocation, languageCode)}',
+                        ),
+                        Text(
                           '${tr(languageCode, 'transfer_pickup_time')}: '
                           '${dateOf(reservation!.pickupTime)} · '
                           '${timeOf(reservation!.pickupTime)}',
@@ -253,7 +450,11 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                   width: double.infinity,
                   child: FilledButton.icon(
                     key: const ValueKey('book-airport-transfer'),
-                    onPressed: reservation == null && availableCount > 0
+                    onPressed:
+                        reservation == null &&
+                            availableCount > 0 &&
+                            !locating &&
+                            isWithinServiceArea
                         ? () => _scheduleTransfer(context, location)
                         : null,
                     icon: const Icon(Icons.event_available_rounded),
@@ -281,6 +482,82 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
           ),
         ),
       ],
+    );
+  }
+}
+
+String _gpsLocationText(GpsLocationEntity location, String languageCode) {
+  return '${location.latitude.toStringAsFixed(6)}, '
+      '${location.longitude.toStringAsFixed(6)} · '
+      '${tr(languageCode, 'gps_accuracy')} '
+      '±${location.accuracyMeters.round()} m';
+}
+
+class _GpsLocationException implements Exception {
+  const _GpsLocationException(this.messageKey);
+
+  final String messageKey;
+}
+
+class _ServiceAreaStatus extends StatelessWidget {
+  const _ServiceAreaStatus({
+    required this.distanceToAirportKm,
+    required this.isWithinServiceArea,
+    required this.languageCode,
+  });
+
+  final double distanceToAirportKm;
+  final bool isWithinServiceArea;
+  final String languageCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = isWithinServiceArea ? Colors.green : theme.colorScheme.error;
+    return Container(
+      key: const ValueKey('transfer-service-area-status'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: .35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isWithinServiceArea
+                ? Icons.check_circle_rounded
+                : Icons.cancel_rounded,
+            size: 20,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr(
+                    languageCode,
+                    isWithinServiceArea
+                        ? 'gps_within_service_area'
+                        : 'gps_outside_service_area',
+                  ),
+                  style: TextStyle(color: color, fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  '${tr(languageCode, 'gps_distance_from_airport')}: '
+                  '${distanceToAirportKm.toStringAsFixed(1)} km · '
+                  '${tr(languageCode, 'transfer_service_radius')}',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -323,8 +600,8 @@ class _PickupSummary extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 Text(
-                  '${tr(languageCode, 'transfer_current_pickup')}: $pickup',
-                  maxLines: 1,
+                  '${tr(languageCode, 'gps_current_location')}: $pickup',
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall,
                 ),
@@ -387,6 +664,8 @@ class _TransferLocation {
     required this.nameTh,
     required this.pickupEn,
     required this.pickupTh,
+    required this.latitude,
+    required this.longitude,
     required this.vehicles,
   });
 
@@ -395,6 +674,8 @@ class _TransferLocation {
   final String nameTh;
   final String pickupEn;
   final String pickupTh;
+  final double latitude;
+  final double longitude;
   final List<_TransferVehicle> vehicles;
 }
 
@@ -405,6 +686,8 @@ const _transferLocations = [
     nameTh: 'สนามบินสุวรรณภูมิ',
     pickupEn: 'Level 1, Gate 4',
     pickupTh: 'ชั้น 1 ประตู 4',
+    latitude: 13.681100,
+    longitude: 100.747002,
     vehicles: [
       _TransferVehicle(
         name: 'Neon Car 01',
@@ -456,11 +739,53 @@ const _transferLocations = [
     ],
   ),
   _TransferLocation(
+    code: 'DMK',
+    nameEn: 'Don Mueang International Airport',
+    nameTh: 'ท่าอากาศยานดอนเมือง',
+    pickupEn: 'Terminal 2, Gate 12',
+    pickupTh: 'อาคาร 2 ประตู 12',
+    latitude: 13.914372,
+    longitude: 100.605692,
+    vehicles: [
+      _TransferVehicle(
+        name: 'Neon DMK 17',
+        model: 'Toyota Camry',
+        driver: 'ณัฐพล',
+        plateNumber: 'กท 1717',
+        seats: 3,
+        etaMinutes: 3,
+        status: _TransferStatus.available,
+        icon: Icons.local_taxi_rounded,
+      ),
+      _TransferVehicle(
+        name: 'Neon DMK 19',
+        model: 'Toyota Commuter',
+        driver: 'วีระ',
+        plateNumber: 'ฮม 1919',
+        seats: 8,
+        etaMinutes: 6,
+        status: _TransferStatus.available,
+        icon: Icons.airport_shuttle_rounded,
+      ),
+      _TransferVehicle(
+        name: 'Neon DMK 22',
+        model: 'Honda CR-V',
+        driver: 'ธนกร',
+        plateNumber: 'ขม 2222',
+        seats: 5,
+        status: _TransferStatus.pickingUp,
+        icon: Icons.directions_car_filled_rounded,
+      ),
+    ],
+  ),
+  _TransferLocation(
     code: 'CNX',
     nameEn: 'Chiang Mai International Airport',
     nameTh: 'สนามบินนานาชาติเชียงใหม่',
     pickupEn: 'Domestic Terminal, Gate 2',
     pickupTh: 'อาคารผู้โดยสารในประเทศ ประตู 2',
+    latitude: 18.766800,
+    longitude: 98.962601,
     vehicles: [
       _TransferVehicle(
         name: 'Neon Car 21',
@@ -498,6 +823,8 @@ const _transferLocations = [
     nameTh: 'สนามบินนานาชาติภูเก็ต',
     pickupEn: 'Domestic Terminal, Gate 1',
     pickupTh: 'อาคารผู้โดยสารในประเทศ ประตู 1',
+    latitude: 8.113257,
+    longitude: 98.317400,
     vehicles: [
       _TransferVehicle(
         name: 'Neon SUV 31',
@@ -536,6 +863,8 @@ const _transferLocations = [
     nameTh: 'สนามบินนานาชาตินาริตะ',
     pickupEn: 'Terminal 1, South Wing',
     pickupTh: 'อาคาร 1 ฝั่งใต้',
+    latitude: 35.768580,
+    longitude: 140.388714,
     vehicles: [
       _TransferVehicle(
         name: 'Neon Tokyo 41',
@@ -574,6 +903,8 @@ const _transferLocations = [
     nameTh: 'สนามบินนานาชาติอินชอน',
     pickupEn: 'Terminal 1, Gate 7',
     pickupTh: 'อาคาร 1 ประตู 7',
+    latitude: 37.469101,
+    longitude: 126.450996,
     vehicles: [
       _TransferVehicle(
         name: 'Neon Seoul 51',
@@ -611,6 +942,8 @@ const _transferLocations = [
     nameTh: 'สนามบินชางงีสิงคโปร์',
     pickupEn: 'Terminal 3, Arrival Pickup',
     pickupTh: 'อาคาร 3 จุดรับผู้โดยสารขาเข้า',
+    latitude: 1.350190,
+    longitude: 103.994003,
     vehicles: [
       _TransferVehicle(
         name: 'Neon SG 61',

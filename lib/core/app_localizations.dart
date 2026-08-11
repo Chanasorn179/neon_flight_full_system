@@ -41,9 +41,26 @@ const Map<String, Map<String, String>> _strings = {
     'no_deals': 'ยังไม่มีดีลในขณะนี้',
     'airport_transfer': 'รถบริการรับส่ง',
     'transfer_subtitle':
-        'จองรถรับส่งจากสนามบินได้ทันที พร้อมจำนวนรถว่างแบบเรียลไทม์',
+        'ใช้ GPS ระบุตำแหน่งรับรถ พร้อมจำนวนรถว่างแบบเรียลไทม์',
     'transfer_current_pickup': 'จุดรับปัจจุบัน',
     'transfer_available_remaining': 'รถว่างเหลือ',
+    'gps_current_location': 'ตำแหน่ง GPS ปัจจุบัน',
+    'gps_location_not_set': 'ยังไม่ได้ระบุตำแหน่ง',
+    'gps_use_current_location': 'ใช้ตำแหน่งปัจจุบัน',
+    'gps_refresh_location': 'อัปเดตตำแหน่ง GPS',
+    'gps_locating': 'กำลังค้นหาตำแหน่ง...',
+    'gps_accuracy': 'ความแม่นยำ',
+    'gps_required': 'กรุณาระบุตำแหน่งด้วย GPS ก่อนจองรถ',
+    'gps_service_disabled': 'กรุณาเปิดบริการตำแหน่ง (GPS) บนอุปกรณ์',
+    'gps_permission_denied': 'ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง',
+    'gps_permission_denied_forever':
+        'สิทธิ์ตำแหน่งถูกปิดถาวร กรุณาเปิดจากการตั้งค่าแอป',
+    'gps_location_failed': 'ไม่สามารถระบุตำแหน่งได้ กรุณาลองอีกครั้ง',
+    'gps_within_service_area': 'อยู่ในพื้นที่ให้บริการ',
+    'gps_outside_service_area':
+        'อยู่นอกพื้นที่ให้บริการ ต้องอยู่ห่างสนามบินไม่เกิน 20 กม.',
+    'gps_distance_from_airport': 'ห่างจากสนามบิน',
+    'transfer_service_radius': 'รัศมีให้บริการสูงสุด 20 กม.',
     'transfer_schedule': 'จองรถรับส่ง',
     'transfer_auto_pickup': 'ระบบกำหนดเวลารับก่อนเที่ยวบิน 3 ชั่วโมงอัตโนมัติ',
     'transfer_flight_departure': 'เวลาเที่ยวบิน',
@@ -51,6 +68,9 @@ const Map<String, Map<String, String>> _strings = {
     'transfer_locked': 'จองรถแล้ว',
     'transfer_ticket_required': 'กรุณาจองเที่ยวบินก่อนจองรถรับส่ง',
     'transfer_schedule_success': 'จองรถรับส่งแล้ว',
+    'transfer_line_notification_success': 'แจ้งคนขับทาง LINE แล้ว',
+    'transfer_line_notification_failed':
+        'แต่ยังแจ้งคนขับทาง LINE ไม่สำเร็จ กรุณาติดต่อเจ้าหน้าที่',
     'driver': 'คนขับ',
     'cars': 'คัน',
     'economy': 'ชั้นประหยัด',
@@ -178,9 +198,26 @@ const Map<String, Map<String, String>> _strings = {
     'no_deals': 'No special deals available',
     'airport_transfer': 'Airport transfer',
     'transfer_subtitle':
-        'Book an airport transfer instantly with real-time availability',
+        'Use GPS to set your pickup location with real-time availability',
     'transfer_current_pickup': 'Current pickup point',
     'transfer_available_remaining': 'Available',
+    'gps_current_location': 'Current GPS location',
+    'gps_location_not_set': 'Location not set',
+    'gps_use_current_location': 'Use current location',
+    'gps_refresh_location': 'Refresh GPS location',
+    'gps_locating': 'Finding your location...',
+    'gps_accuracy': 'Accuracy',
+    'gps_required': 'Set your GPS location before booking a transfer',
+    'gps_service_disabled': 'Turn on location services (GPS) on your device',
+    'gps_permission_denied': 'Location permission was denied',
+    'gps_permission_denied_forever':
+        'Location permission is disabled. Enable it in app settings',
+    'gps_location_failed': 'Unable to determine your location. Try again',
+    'gps_within_service_area': 'Within the service area',
+    'gps_outside_service_area':
+        'Outside the service area. You must be within 20 km of the airport',
+    'gps_distance_from_airport': 'Distance from airport',
+    'transfer_service_radius': 'Maximum service radius: 20 km',
     'transfer_schedule': 'Book airport transfer',
     'transfer_auto_pickup':
         'Pickup is automatically scheduled 3 hours before departure',
@@ -189,6 +226,9 @@ const Map<String, Map<String, String>> _strings = {
     'transfer_locked': 'Transfer booked',
     'transfer_ticket_required': 'Book a flight before booking a transfer',
     'transfer_schedule_success': 'Airport transfer booked',
+    'transfer_line_notification_success': 'Driver notified through LINE',
+    'transfer_line_notification_failed':
+        'Driver could not be notified through LINE. Contact support',
     'driver': 'Driver',
     'cars': 'cars',
     'economy': 'Economy Class',
@@ -668,6 +708,7 @@ String tr(String languageCode, String key) =>
 String cityName(String lang, String code, {String? cityTh, String? cityEn}) {
   const map = {
     'BKK': {'ja': 'バンコク', 'zh': '曼谷', 'ko': '방콕'},
+    'DMK': {'ja': 'バンコク', 'zh': '曼谷', 'ko': '방콕'},
     'CNX': {'ja': 'チェンマイ', 'zh': '清迈', 'ko': '치앙마이'},
     'HKT': {'ja': 'プーケット', 'zh': '普吉', 'ko': '푸켓'},
     'NRT': {'ja': '東京', 'zh': '东京', 'ko': '도쿄'},

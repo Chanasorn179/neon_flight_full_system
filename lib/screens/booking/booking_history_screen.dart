@@ -200,7 +200,12 @@ class _TransferBookingCard extends StatelessWidget {
     final airport = languageCode == 'th'
         ? booking.airportNameTh
         : booking.airportNameEn;
-    final pickup = languageCode == 'th' ? booking.pickupTh : booking.pickupEn;
+    final pickupLocation = booking.pickupLocation;
+    final gpsLocation =
+        '${pickupLocation.latitude.toStringAsFixed(6)}, '
+        '${pickupLocation.longitude.toStringAsFixed(6)} · '
+        '${tr(languageCode, 'gps_accuracy')} '
+        '±${pickupLocation.accuracyMeters.round()} m';
 
     return Card(
       key: ValueKey('transfer-booking-${booking.id}'),
@@ -243,8 +248,16 @@ class _TransferBookingCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _TransferBookingDetail(
-              icon: Icons.location_on_outlined,
-              text: '${tr(languageCode, 'transfer_current_pickup')}: $pickup',
+              icon: Icons.my_location_rounded,
+              text: '${tr(languageCode, 'gps_current_location')}: $gpsLocation',
+            ),
+            const SizedBox(height: 8),
+            _TransferBookingDetail(
+              icon: Icons.radar_rounded,
+              text:
+                  '${tr(languageCode, 'gps_distance_from_airport')}: '
+                  '${booking.distanceToAirportKm.toStringAsFixed(1)} km · '
+                  '${tr(languageCode, 'gps_within_service_area')}',
             ),
             const SizedBox(height: 8),
             _TransferBookingDetail(
