@@ -1,0 +1,66 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+Neon Flight: a Flutter airline booking app (flight search, seat selection, payment UI, QR e-tickets, airport transfers) backed by Firebase Auth/Firestore/Hosting, plus an optional Node/Express backend in `backend/`. See `README.md` for the full feature list and Firestore layout.
+
+**The Dart package name is `mini_projects`** (inherited from the template), not `neon_flight`. Test and package imports use `package:mini_projects/...`.
+
+## Commands
+
+Flutter app (run from repo root; targets Flutter 3.44 / Dart 3.12, JDK 17):
+
+```bash
+flutter pub get
+flutter analyze                 # expected: "No issues found!"
+flutter test
+flutter test test/transfer_dispatch_service_test.dart     # single file
+flutter test --plain-name "some test name"                 # single test
+flutter run -d emulator-5554
+```
+
+Build-time config goes through `--dart-define` (read via `String/bool.fromEnvironment`):
+
+| Define | Used in | Purpose |
+|---|---|---|
+| `NEON_API_BASE_URL` | `aviation_api_service.dart`, `transfer_dispatch_service.dart` | Backend URL. Default `http://10.0.2.2:5000/api` (Android emulator → host). Use the LAN IP for a physical phone. |
+| `ALLOW_MOCK_FLIGHTS` | `aviation_api_service.dart` | Fall back to mock flights when the API fails (default on). |
+| `NEON_DISPATCH_API_KEY` | `transfer_dispatch_service.dart` | Must match backend `DISPATCH_API_KEY`. |
+| `PROMPTPAY_ID` | `promptpay_service.dart` | PromptPay receiving ID for QR generation. |
+| `TICKET_SIGNING_SECRET` | `ticket_qr_service.dart` | HMAC key for e-ticket tokens (plain SHA-256 if empty). |
+
+Backend (`backend/`, Express 5 + better-sqlite3, port 5000, DB file `backend/neon-flight.db`, schema in `schema.sql`):
+
+```bash
+cd backend && npm install
+npm run dev        # node server.js
+npm test           # node --test (server.test.js, line_dispatch.test.js)
+```
+
+Backend env vars: `AVIATIONSTACK_API_KEY`, `JWT_SECRET`, `DISPATCH_API_KEY`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_DRIVER_TARGET_ID`, `PORT`. `GET /api/health` reports whether Aviationstack is configured.
+
+Firebase (project `neon-flight`):
+
+```bash
+firebase deploy --only hosting,firestore:rules
+```
+
+## Architecture
+
+- **Composition root is `lib/main.dart`.** It calls `FirebaseService.initialize()`. If that succeeds, `FirebaseService.enabled` is true and the Firebase repositories are used. If it fails, the app silently switches to the `Mock*Repository` implementations backed by `data/mock_api.dart`. When auth or bookings "don't persist", check `FirebaseService.initializationError` first.
+- **Layers:** `screens/` → `providers/` (ChangeNotifier, via `provider`'s `MultiProvider`) → `repositories/` (abstract interface + Firebase/Mock/Hybrid implementations) → `services/` (Firebase, HTTP, QR, PromptPay). All models are in `models/entities.dart`. The code uses normal imports only, with no `part`/`part of`.
+- **Flights:** `HybridFlightRepository` goes through the backend (which proxies Aviationstack so the key stays server-side) and falls back to mock data. Aviationstack has no fares, so prices are demo values (`pricingSource: demo`).
+- **E-tickets:** `TicketQrService` derives a 12-char token from the booking ID. The QR encodes `https://neon-flight.web.app/t/{bookingId}?token=...`. A public copy is written to `publicTickets/{bookingId_token}`, kept separate from the private `bookings/{id}`. Firebase Hosting serves `web_ticket/` (static verifier page) and rewrites `/t/**` → `index.html`. Changing the token scheme breaks tickets that were already issued.
+- **Airport transfers:** `TransferDispatchService` POSTs to the backend `/api/transfer-bookings`. The backend stores the booking and pushes it to the driver through the LINE Messaging API (`line_dispatch.js`). The LINE token never ships in the app.
+- **Security rules:** `firestore.rules` restricts users to their own `users/{uid}` subtree and to bookings where `userId == uid`. Update the rules whenever you add a collection or field access pattern.
+- **Payments:** only display metadata is stored (card brand plus last 4 digits). Never persist full card numbers, CVV, OTP, PINs, or bank credentials. PromptPay is QR generation only, with no settlement or webhook verification.
+- **i18n:** `core/app_localizations.dart` contains a hand-written string map for th, en, ja, zh, and ko, selected through `LanguageProvider`. When you add a UI string, add a key for every language.
+
+## Gotchas
+
+- Source files contain Thai text. Keep them UTF-8. Earlier edits caused mojibake that had to be repaired (see the `FIX_THAI_ENCODING.ps1` history). This matters most when writing files from PowerShell, which should use `-Encoding utf8`.
+- `lib/` contains stray `*.backup_*` / `*.mojibake_backup_*` files, and the root contains `FIX_*.ps1` / `REPAIR_*.ps1` scripts. They are gitignored local repair artifacts, not live code, so ignore them when reading code.
+- `SETUP_5_6.md` (gitignored) documents `FIREBASE_*` dart-defines, which are outdated. Firebase config now comes from the FlutterFire-generated `lib/firebase_options.dart` (regenerate with `flutterfire configure`).
+- `android_old/` and `build/` are stale. The active Android project is `android/`.
