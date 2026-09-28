@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'core/theme.dart';
@@ -16,14 +17,32 @@ class NeonFlightApp extends StatelessWidget {
     final settings = context.watch<SettingsProvider>();
     final language = context.watch<LanguageProvider>();
     final auth = context.watch<AuthProvider>();
+    final darkMode = settings.darkMode;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'NEON FLIGHT',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: settings.darkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
       locale: language.locale,
+      builder: (context, child) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+            systemNavigationBarColor: theme.scaffoldBackgroundColor,
+            systemNavigationBarIconBrightness:
+                isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarDividerColor: Colors.transparent,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: auth.currentUser == null ? const LoginScreen() : const MainShell(),
     );
   }

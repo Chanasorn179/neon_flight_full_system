@@ -38,6 +38,7 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final provider = context.watch<FlightProvider>();
     final bookingProvider = context.watch<BookingProvider>();
     final bookings = bookingProvider.bookings;
@@ -69,18 +70,40 @@ class DashboardScreen extends StatelessWidget {
           );
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 20,
         title: const Text(
           'NEON FLIGHT',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            letterSpacing: .2,
+          ),
         ),
         actions: [
-          IconButton(
-            tooltip: tr(lang, 'notifications'),
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(tr(lang, 'no_notifications'))),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: IconButton(
+              tooltip: tr(lang, 'notifications'),
+              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(tr(lang, 'no_notifications'))),
+              ),
+              style: IconButton.styleFrom(
+                backgroundColor: theme.colorScheme.surfaceContainerLowest,
+                foregroundColor: theme.colorScheme.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                side: BorderSide(
+                  color: theme.colorScheme.outlineVariant.withValues(alpha: .6),
+                ),
+              ),
+              icon: const Icon(Icons.notifications_none_rounded),
             ),
-            icon: const Icon(Icons.notifications_none_rounded),
           ),
         ],
       ),
@@ -88,31 +111,46 @@ class DashboardScreen extends StatelessWidget {
         onRefresh: provider.loadAirports,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
           children: [
-            Text(
-              '${tr(lang, 'hello')} ${user?.name ?? ''} 👋',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user?.name == null || user!.name.trim().isEmpty
+                        ? tr(lang, 'hello')
+                        : '${tr(lang, 'hello')} ${user.name} 👋',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    tr(lang, 'where_today'),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 6),
-            Text(tr(lang, 'where_today')),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _SearchCard(
               provider: provider,
               lang: lang,
               onPickDate: () => _pickDate(context, provider),
               onSearch: () => _search(context),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 26),
             SectionTitle(
               tr(lang, 'special_deals'),
               icon: Icons.local_fire_department_rounded,
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 240,
+              height: 252,
               child: provider.promotions.isEmpty
                   ? Center(child: Text(tr(lang, 'no_deals')))
                   : ListView.separated(
@@ -133,7 +171,7 @@ class DashboardScreen extends StatelessWidget {
                       },
                     ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 26),
             AirportTransferSection(
               languageCode: lang,
               departureAirportCode:
@@ -152,22 +190,26 @@ class DashboardScreen extends StatelessWidget {
                 );
               },
             ),
-            const SizedBox(height: 28),
-            SectionTitle(tr(lang, 'popular_destinations'), icon: Icons.public),
+            const SizedBox(height: 26),
+            SectionTitle(
+              tr(lang, 'popular_destinations'),
+              icon: Icons.public_rounded,
+            ),
             const SizedBox(height: 12),
             Wrap(
-              spacing: 10,
-              runSpacing: 10,
+              spacing: 12,
+              runSpacing: 12,
               children: [
-                for (final airport in provider.airports.where(
-                  (a) => a.code != 'BKK',
-                ))
-                  ActionChip(
-                    avatar: const Icon(Icons.location_on_outlined, size: 18),
-                    label: Text(
-                      '${cityName(lang, airport.code, cityTh: airport.cityTh, cityEn: airport.cityEn)} (${airport.code})',
+                for (final airport in provider.airports.where((a) => a.code != 'BKK'))
+                  _DestinationChip(
+                    label: cityName(
+                      lang,
+                      airport.code,
+                      cityTh: airport.cityTh,
+                      cityEn: airport.cityEn,
                     ),
-                    onPressed: () async {
+                    code: airport.code,
+                    onTap: () async {
                       provider.setRoute('BKK', airport.code);
                       await _search(context);
                     },
@@ -196,17 +238,53 @@ class _SearchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final theme = Theme.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: .55),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .05),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: double.infinity,
+            Text(
+              tr(lang, 'search_flight'),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              tr(lang, 'where_today'),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: .3),
+                borderRadius: BorderRadius.circular(18),
+              ),
               child: SegmentedButton<TripType>(
                 segments: [
                   ButtonSegment(
                     value: TripType.oneWay,
+                    icon: const Icon(Icons.check_rounded, size: 16),
                     label: Text(tr(lang, 'one_way')),
                   ),
                   ButtonSegment(
@@ -216,6 +294,14 @@ class _SearchCard extends StatelessWidget {
                 ],
                 selected: {provider.tripType},
                 onSelectionChanged: (v) => provider.setTripType(v.first),
+                showSelectedIcon: false,
+                style: ButtonStyle(
+                  shape: WidgetStatePropertyAll(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -227,24 +313,33 @@ class _SearchCard extends StatelessWidget {
                     value: provider.from,
                     airports: provider.airports,
                     lang: lang,
+                    icon: Icons.flight_takeoff_rounded,
                     onChanged: (v) {
                       if (v != null) provider.setRoute(v, provider.to);
                     },
                   ),
                 ),
-                const SizedBox(width: 6),
-                IconButton.filledTonal(
-                  tooltip: tr(lang, 'swap'),
-                  onPressed: provider.swapRoute,
-                  icon: const Icon(Icons.swap_horiz),
+                const SizedBox(width: 10),
+                Container(
+                  margin: const EdgeInsets.only(top: 16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer.withValues(alpha: .55),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    tooltip: tr(lang, 'swap'),
+                    onPressed: provider.swapRoute,
+                    icon: const Icon(Icons.swap_horiz_rounded),
+                  ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _AirportDrop(
                     label: tr(lang, 'to'),
                     value: provider.to,
                     airports: provider.airports,
                     lang: lang,
+                    icon: Icons.flight_land_rounded,
                     onChanged: (v) {
                       if (v != null) provider.setRoute(provider.from, v);
                     },
@@ -252,20 +347,21 @@ class _SearchCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             LayoutBuilder(
               builder: (context, c) {
-                final narrow = c.maxWidth < 340;
-                final date = OutlinedButton.icon(
-                  onPressed: onPickDate,
-                  icon: const Icon(Icons.calendar_month),
-                  label: FittedBox(child: Text(dateOf(provider.departureDate))),
+                final narrow = c.maxWidth < 360;
+                final date = _InfoPickerTile(
+                  icon: Icons.calendar_month_rounded,
+                  label: tr(lang, 'date'),
+                  value: dateOf(provider.departureDate),
+                  onTap: onPickDate,
                 );
                 final cabin = _CabinDropdown(provider: provider, lang: lang);
                 if (narrow) {
                   return Column(
                     children: [
-                      SizedBox(width: double.infinity, child: date),
+                      date,
                       const SizedBox(height: 10),
                       cabin,
                     ],
@@ -274,23 +370,29 @@ class _SearchCard extends StatelessWidget {
                 return Row(
                   children: [
                     Expanded(child: date),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(child: cabin),
                   ],
                 );
               },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _PassengerPicker(provider: provider, lang: lang),
-            const SizedBox(height: 14),
+            const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: provider.loading ? null : onSearch,
-                icon: const Icon(Icons.search),
-                label: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Text(tr(lang, 'search_flight')),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                icon: const Icon(Icons.search_rounded),
+                label: Text(
+                  tr(lang, 'search_flight'),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
             ),
@@ -308,18 +410,42 @@ class _AirportDrop extends StatelessWidget {
     required this.airports,
     required this.lang,
     required this.onChanged,
+    required this.icon,
   });
 
-  final String label, value, lang;
+  final String label;
+  final String value;
+  final String lang;
   final List<AirportEntity> airports;
   final ValueChanged<String?> onChanged;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return DropdownButtonFormField<String>(
       initialValue: airports.any((a) => a.code == value) ? value : null,
       isExpanded: true,
-      decoration: InputDecoration(labelText: label),
+      borderRadius: BorderRadius.circular(18),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20),
+        filled: true,
+        fillColor: theme.colorScheme.surfaceContainerLow,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: .75),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: .75),
+          ),
+        ),
+      ),
       items: airports
           .map(
             (a) => DropdownMenuItem(
@@ -337,17 +463,98 @@ class _AirportDrop extends StatelessWidget {
   }
 }
 
+class _InfoPickerTile extends StatelessWidget {
+  const _InfoPickerTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: .75),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: theme.colorScheme.primary, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CabinDropdown extends StatelessWidget {
   const _CabinDropdown({required this.provider, required this.lang});
+
   final FlightProvider provider;
   final String lang;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return DropdownButtonFormField<CabinClass>(
       initialValue: provider.cabinClass,
       isExpanded: true,
-      decoration: InputDecoration(labelText: tr(lang, 'cabin_class')),
+      borderRadius: BorderRadius.circular(18),
+      decoration: InputDecoration(
+        labelText: tr(lang, 'cabin_class'),
+        prefixIcon: const Icon(Icons.airline_seat_recline_normal_rounded),
+        filled: true,
+        fillColor: theme.colorScheme.surfaceContainerLow,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: .75),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: .75),
+          ),
+        ),
+      ),
       items: CabinClass.values
           .map(
             (c) => DropdownMenuItem(
@@ -365,41 +572,68 @@ class _CabinDropdown extends StatelessWidget {
 
 class _PassengerPicker extends StatelessWidget {
   const _PassengerPicker({required this.provider, required this.lang});
+
   final FlightProvider provider;
   final String lang;
 
   @override
   Widget build(BuildContext context) {
-    return ExpansionTile(
-      tilePadding: EdgeInsets.zero,
-      title: Text('${tr(lang, 'passengers')} ${provider.passengerCount}'),
-      leading: const Icon(Icons.people_outline),
-      children: [
-        _PassengerRow(
-          label: tr(lang, 'adult'),
-          value: provider.adults,
-          onRemove: provider.adults > 1
-              ? () => provider.setPassengers(
-                  provider.adults - 1,
-                  provider.children,
-                )
-              : null,
-          onAdd: () =>
-              provider.setPassengers(provider.adults + 1, provider.children),
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: .75),
         ),
-        _PassengerRow(
-          label: tr(lang, 'child'),
-          value: provider.children,
-          onRemove: provider.children > 0
-              ? () => provider.setPassengers(
-                  provider.adults,
-                  provider.children - 1,
-                )
-              : null,
-          onAdd: () =>
-              provider.setPassengers(provider.adults, provider.children + 1),
+      ),
+      child: ExpansionTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        collapsedShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
         ),
-      ],
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+        title: Text(
+          '${tr(lang, 'passengers')} ${provider.passengerCount}',
+          style: TextStyle(
+            color: theme.colorScheme.onSurface,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          '${tr(lang, 'adult')} ${provider.adults} · ${tr(lang, 'child')} ${provider.children}',
+          style: theme.textTheme.bodySmall,
+        ),
+        leading: const Icon(Icons.people_alt_outlined),
+        children: [
+          _PassengerRow(
+            label: tr(lang, 'adult'),
+            value: provider.adults,
+            onRemove: provider.adults > 1
+                ? () => provider.setPassengers(
+                    provider.adults - 1,
+                    provider.children,
+                  )
+                : null,
+            onAdd: () =>
+                provider.setPassengers(provider.adults + 1, provider.children),
+          ),
+          const SizedBox(height: 8),
+          _PassengerRow(
+            label: tr(lang, 'child'),
+            value: provider.children,
+            onRemove: provider.children > 0
+                ? () => provider.setPassengers(
+                    provider.adults,
+                    provider.children - 1,
+                  )
+                : null,
+            onAdd: () =>
+                provider.setPassengers(provider.adults, provider.children + 1),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -419,19 +653,70 @@ class _PassengerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Row(
       children: [
-        Expanded(child: Text(label)),
-        IconButton(
-          onPressed: onRemove,
-          icon: const Icon(Icons.remove_circle_outline),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
-        SizedBox(width: 28, child: Text('$value', textAlign: TextAlign.center)),
-        IconButton(
-          onPressed: onAdd,
-          icon: const Icon(Icons.add_circle_outline),
+        _StepCircleButton(
+          icon: Icons.remove_rounded,
+          onTap: onRemove,
+          enabledColor: theme.colorScheme.primary,
+        ),
+        SizedBox(
+          width: 34,
+          child: Text(
+            '$value',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        _StepCircleButton(
+          icon: Icons.add_rounded,
+          onTap: onAdd,
+          enabledColor: theme.colorScheme.primary,
         ),
       ],
+    );
+  }
+}
+
+class _StepCircleButton extends StatelessWidget {
+  const _StepCircleButton({
+    required this.icon,
+    required this.onTap,
+    required this.enabledColor,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final Color enabledColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Ink(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: enabled
+              ? enabledColor.withValues(alpha: .12)
+              : Colors.grey.withValues(alpha: .12),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: enabled ? enabledColor : Colors.grey,
+        ),
+      ),
     );
   }
 }
@@ -442,6 +727,7 @@ class _PromoCard extends StatelessWidget {
     required this.lang,
     required this.onSelect,
   });
+
   final PromotionEntity promo;
   final String lang;
   final VoidCallback onSelect;
@@ -449,57 +735,257 @@ class _PromoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final gradient = _promoGradient(promo.cabinClass, isDark);
+    final promoTextColor = isDark ? const Color(0xFFF7F9FF) : const Color(0xFF162033);
+
     return SizedBox(
-      width: 255,
-      child: Card(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: .55),
+      width: 250,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: theme.colorScheme.primary.withValues(alpha: .1),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      promo.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: .10)
+                            : Colors.white.withValues(alpha: .72),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        promo.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: promoTextColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Chip(
-                    label: Text('-${promo.discountPercent}%'),
-                    visualDensity: VisualDensity.compact,
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: .12)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '-${promo.discountPercent}%',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFFBBD1FF) : theme.colorScheme.primary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const Spacer(),
               Text(
                 '${promo.from} → ${promo.to}',
-                style: theme.textTheme.titleLarge?.copyWith(
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: promoTextColor,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              Text(_cabin(lang, promo.cabinClass)),
               const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: .10)
+                      : Colors.white.withValues(alpha: .65),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _cabin(lang, promo.cabinClass),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(height: 8),
               Text(
                 '${tr(lang, 'remaining')} ${promo.seatsLeft} ${tr(lang, 'seats')}',
                 style: TextStyle(
                   color: theme.colorScheme.error,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.tonal(
                   onPressed: onSelect,
-                  child: Text(tr(lang, 'view_flights')),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: isDark
+                        ? Colors.white.withValues(alpha: .10)
+                        : Colors.white.withValues(alpha: .55),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Text(
+                    tr(lang, 'view_flights'),
+                    style: TextStyle(
+                      color: promoTextColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  LinearGradient _promoGradient(CabinClass cabin, bool isDark) {
+    if (isDark) {
+      return switch (cabin) {
+        CabinClass.economy => const LinearGradient(
+          colors: [Color(0xFF1C2C45), Color(0xFF243A59)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        CabinClass.premiumEconomy => const LinearGradient(
+          colors: [Color(0xFF173B36), Color(0xFF21514A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        CabinClass.business => const LinearGradient(
+          colors: [Color(0xFF322853), Color(0xFF463770)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        CabinClass.first => const LinearGradient(
+          colors: [Color(0xFF463A20), Color(0xFF5A4827)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      };
+    }
+
+    return switch (cabin) {
+      CabinClass.economy => const LinearGradient(
+        colors: [Color(0xFFDDE8FF), Color(0xFFC9D9F8)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      CabinClass.premiumEconomy => const LinearGradient(
+        colors: [Color(0xFFE2F4EE), Color(0xFFCDEBDF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      CabinClass.business => const LinearGradient(
+        colors: [Color(0xFFE6E0FF), Color(0xFFD9D0FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      CabinClass.first => const LinearGradient(
+        colors: [Color(0xFFFFF0C7), Color(0xFFFFE5A3)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    };
+  }
+}
+
+class _DestinationChip extends StatelessWidget {
+  const _DestinationChip({
+    required this.label,
+    required this.code,
+    required this.onTap,
+  });
+
+  final String label;
+  final String code;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = (MediaQuery.of(context).size.width - 44) / 2;
+    final theme = Theme.of(context);
+
+    return SizedBox(
+      width: width,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: .55),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .04),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer.withValues(alpha: .5),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.location_on_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      code,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

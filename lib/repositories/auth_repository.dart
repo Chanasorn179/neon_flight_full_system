@@ -5,25 +5,51 @@ import '../models/entities.dart';
 
 abstract class AuthRepository {
   Future<UserEntity> login(String email, String password);
-  Future<UserEntity> register(String name, String email, String password);
+
+  Future<UserEntity> register(
+    String name,
+    String email,
+    String password,
+  );
+
   Future<void> forgotPassword(String email);
 }
 
 class FirebaseAuthRepository implements AuthRepository {
-  FirebaseAuthRepository({FirebaseAuth? auth})
-      : _auth = auth ?? FirebaseAuth.instance;
+  FirebaseAuthRepository({
+    FirebaseAuth? auth,
+  }) : _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseAuth _auth;
 
   @override
-  Future<UserEntity> login(String email, String password) async {
+  Future<UserEntity> login(
+    String email,
+    String password,
+  ) async {
+    final normalizedEmail = email.trim().toLowerCase();
+
+    if (normalizedEmail.isEmpty) {
+      throw Exception('กรุณากรอกอีเมล');
+    }
+
+    if (password.isEmpty) {
+      throw Exception('กรุณากรอกรหัสผ่าน');
+    }
+
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
+      final credential =
+          await _auth.signInWithEmailAndPassword(
+        email: normalizedEmail,
         password: password,
       );
+
       final user = credential.user;
-      if (user == null) throw Exception('ไม่พบข้อมูลผู้ใช้');
+
+      if (user == null) {
+        throw Exception('ไม่พบข้อมูลผู้ใช้');
+      }
+
       return _entity(user);
     } on FirebaseAuthException catch (error) {
       throw Exception(_message(error));
@@ -36,16 +62,41 @@ class FirebaseAuthRepository implements AuthRepository {
     String email,
     String password,
   ) async {
+    final normalizedName = name.trim();
+    final normalizedEmail = email.trim().toLowerCase();
+
+    if (normalizedName.isEmpty) {
+      throw Exception('กรุณากรอกชื่อ');
+    }
+
+    if (normalizedEmail.isEmpty) {
+      throw Exception('กรุณากรอกอีเมล');
+    }
+
+    if (password.length < 6) {
+      throw Exception('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+    }
+
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
+      final credential =
+          await _auth.createUserWithEmailAndPassword(
+        email: normalizedEmail,
         password: password,
       );
+
       final user = credential.user;
-      if (user == null) throw Exception('สร้างบัญชีไม่สำเร็จ');
-      await user.updateDisplayName(name.trim());
+
+      if (user == null) {
+        throw Exception('สร้างบัญชีไม่สำเร็จ');
+      }
+
+      await user.updateDisplayName(normalizedName);
       await user.reload();
-      return _entity(_auth.currentUser ?? user, fallbackName: name.trim());
+
+      return _entity(
+        _auth.currentUser ?? user,
+        fallbackName: normalizedName,
+      );
     } on FirebaseAuthException catch (error) {
       throw Exception(_message(error));
     }
@@ -53,59 +104,110 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> forgotPassword(String email) async {
+    final normalizedEmail = email.trim().toLowerCase();
+
+    if (normalizedEmail.isEmpty) {
+      throw Exception('กรุณากรอกอีเมล');
+    }
+
+    if (!_looksLikeEmail(normalizedEmail)) {
+      throw Exception('รูปแบบอีเมลไม่ถูกต้อง');
+    }
+
     try {
-      await _auth.sendPasswordResetEmail(email: email.trim());
+      await _auth.sendPasswordResetEmail(
+        email: normalizedEmail,
+      );
     } on FirebaseAuthException catch (error) {
       throw Exception(_message(error));
     }
   }
 
-  UserEntity _entity(User user, {String? fallbackName}) => UserEntity(
-        id: user.uid,
-        name: (user.displayName?.trim().isNotEmpty ?? false)
-            ? user.displayName!.trim()
-            : (fallbackName?.isNotEmpty ?? false)
-                ? fallbackName!
-                : (user.email?.split('@').first ?? 'User'),
-        email: user.email ?? '',
-      );
+  bool _looksLikeEmail(String value) {
+    return RegExp(
+      r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+    ).hasMatch(value);
+  }
+
+  UserEntity _entity(
+    User user, {
+    String? fallbackName,
+  }) {
+    final displayName = user.displayName?.trim() ?? '';
+
+    return UserEntity(
+      id: user.uid,
+      name: displayName.isNotEmpty
+          ? displayName
+          : (fallbackName?.trim().isNotEmpty ?? false)
+              ? fallbackName!.trim()
+              : (user.email?.split('@').first ?? 'User'),
+      email: user.email ?? '',
+    );
+  }
 
   String _message(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-email':
-        return 'อีเมลไม่ถูกต้อง';
+        return 'รูปแบบอีเมลไม่ถูกต้อง';
+
       case 'invalid-credential':
       case 'wrong-password':
       case 'user-not-found':
         return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+
       case 'email-already-in-use':
         return 'อีเมลนี้ถูกใช้งานแล้ว';
+
       case 'weak-password':
         return 'รหัสผ่านไม่ปลอดภัยเพียงพอ';
+
       case 'too-many-requests':
-        return 'มีการลองเข้าสู่ระบบมากเกินไป กรุณาลองใหม่ภายหลัง';
+        return 'มีการร้องขอมากเกินไป กรุณาลองใหม่ภายหลัง';
+
       case 'network-request-failed':
-        return 'ไม่สามารถเชื่อมต่อ Firebase ได้';
+        return 'ไม่สามารถเชื่อมต่อ Firebase ได้ กรุณาตรวจสอบอินเทอร์เน็ต';
+
       case 'operation-not-allowed':
         return 'ยังไม่ได้เปิด Email/Password ใน Firebase Authentication';
+
+      case 'missing-email':
+        return 'กรุณากรอกอีเมล';
+
       default:
-        return error.message ?? error.code;
+        return error.message ?? 'เกิดข้อผิดพลาดในการยืนยันตัวตน';
     }
   }
 }
 
 class MockAuthRepository implements AuthRepository {
   MockAuthRepository(this.api);
+
   final MockApi api;
 
   @override
-  Future<UserEntity> login(String email, String password) =>
-      api.login(email, password);
+  Future<UserEntity> login(
+    String email,
+    String password,
+  ) {
+    return api.login(email, password);
+  }
 
   @override
-  Future<UserEntity> register(String name, String email, String password) =>
-      api.register(name, email, password);
+  Future<UserEntity> register(
+    String name,
+    String email,
+    String password,
+  ) {
+    return api.register(
+      name,
+      email,
+      password,
+    );
+  }
 
   @override
-  Future<void> forgotPassword(String email) => api.forgotPassword(email);
+  Future<void> forgotPassword(String email) {
+    return api.forgotPassword(email);
+  }
 }

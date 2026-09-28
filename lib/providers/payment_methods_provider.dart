@@ -195,7 +195,8 @@ class PaymentMethodsProvider extends ChangeNotifier {
             .replaceAll(RegExp(r'[0-9]'), '')
             .replaceAll(
               RegExp(
-                r'(?i)cvv|cvc|otp|pin|password|passcode',
+                r'cvv|cvc|otp|pin|password|passcode',
+                caseSensitive: false,
               ),
               '',
             )
