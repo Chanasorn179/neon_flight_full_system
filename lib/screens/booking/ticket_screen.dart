@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/app_localizations.dart';
 import '../../models/entities.dart';
 import '../../providers/language_provider.dart';
+import '../../services/firebase_service.dart';
 import '../../services/ticket_qr_service.dart';
 import '../../widgets/app_widgets.dart';
 import 'ticket_scanner_screen.dart';
@@ -112,38 +113,55 @@ class TicketScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 20),
 
-                        // Bigger QR + generous quiet zone + short payload.
-                        // This makes it much easier to scan using another
-                        // phone's camera, Google Lens, or a generic QR app.
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.all(18),
-                          child: QrImageView(
-                            data: qrData,
-                            version: QrVersions.auto,
-                            size: 240,
-                            backgroundColor: Colors.white,
-                            padding: const EdgeInsets.all(12),
-                            gapless: true,
-                            errorCorrectionLevel: QrErrorCorrectLevel.M,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          booking.id,
-                          style: const TextStyle(
-                            letterSpacing: 2,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'QR สามารถสแกนด้วยกล้องหรือแอป QR ทั่วไปได้',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall,
+                        // The QR only appears once the server has confirmed
+                        // payment and issued the public ticket record.
+                        StreamBuilder<PaymentStatus>(
+                          stream: booking.isPaid
+                              ? null
+                              : FirebaseService.watchPaymentStatus(booking.id),
+                          initialData: booking.paymentStatus,
+                          builder: (context, snapshot) {
+                            if (snapshot.data != PaymentStatus.paid) {
+                              return _PendingPayment(booking: booking);
+                            }
+                            return Column(
+                              children: [
+                            // Bigger QR + generous quiet zone + short payload.
+                            // This makes it much easier to scan using another
+                            // phone's camera, Google Lens, or a generic QR app.
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.all(18),
+                              child: QrImageView(
+                                data: qrData,
+                                version: QrVersions.auto,
+                                size: 240,
+                                backgroundColor: Colors.white,
+                                padding: const EdgeInsets.all(12),
+                                gapless: true,
+                                errorCorrectionLevel: QrErrorCorrectLevel.M,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              booking.id,
+                              style: const TextStyle(
+                                letterSpacing: 2,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'QR สามารถสแกนด้วยกล้องหรือแอป QR ทั่วไปได้',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -226,3 +244,46 @@ String _cabin(String lang, CabinClass c) => switch (c) {
       CabinClass.business => tr(lang, 'business'),
       CabinClass.first => tr(lang, 'first'),
     };
+
+class _PendingPayment extends StatelessWidget {
+  const _PendingPayment({required this.booking});
+
+  final BookingEntity booking;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.tertiaryContainer.withValues(alpha: .6),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.hourglass_top_rounded,
+            size: 40,
+            color: theme.colorScheme.onTertiaryContainer,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'รอยืนยันการชำระเงิน',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'ยอดชำระ ${money(booking.fare.total)}\n'
+            'ใช้ Booking ID ${booking.id} เป็นหมายเหตุตอนโอน\n'
+            'QR ตั๋วจะแสดงที่นี่อัตโนมัติเมื่อยืนยันยอดเงินแล้ว',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}

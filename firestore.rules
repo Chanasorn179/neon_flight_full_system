@@ -59,32 +59,34 @@ service cloud.firestore {
     }
 
     match /bookings/{bookingId} {
+      // The app may only create an unpaid booking. Payment confirmation
+      // (paymentStatus 'paid', paidAt, ...) is written by
+      // backend/scripts/payments.js through the Admin SDK.
       allow create:
         if signedIn()
-        && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.id == bookingId
+        && request.resource.data.status == 'upcoming'
+        && request.resource.data.paymentStatus == 'pending'
+        && !request.resource.data.keys().hasAny([
+          'paidAt',
+          'paymentConfirmedBy',
+          'ticketIssuedAt'
+        ]);
 
-      allow read, update, delete:
+      allow read:
         if signedIn()
         && resource.data.userId == request.auth.uid;
+
+      allow update, delete: if false;
     }
 
     // Public E-ticket verification by exact, tokenized document ID.
-    // Collection listing is denied.
+    // Only the server issues tickets, after payment is confirmed.
     match /publicTickets/{ticketId} {
       allow get: if true;
       allow list: if false;
-
-      allow create:
-        if signedIn()
-        && get(
-          /databases/$(database)/documents/bookings/$(request.resource.data.bookingId)
-        ).data.userId == request.auth.uid;
-
-      allow update, delete:
-        if signedIn()
-        && get(
-          /databases/$(database)/documents/bookings/$(resource.data.bookingId)
-        ).data.userId == request.auth.uid;
+      allow write: if false;
     }
 
     // Public reference data, written only by backend/scripts/seed_firestore.js

@@ -18,7 +18,8 @@ class MockBookingRepository implements BookingRepository {
 
   @override
   Future<BookingEntity> create(BookingEntity booking) {
-    return api.createBooking(booking);
+    // Offline/mock mode has no server to confirm payment.
+    return api.createBooking(booking.withPaymentStatus(PaymentStatus.paid));
   }
 
   @override
@@ -117,6 +118,10 @@ Map<String, dynamic> _bookingToMap(
 
     'status':
     booking.status.name,
+
+    // Firestore rules only accept 'pending' from the app.
+    'paymentStatus':
+    PaymentStatus.pending.name,
 
     'createdAt': Timestamp.fromDate(
       booking.createdAt,
@@ -222,6 +227,12 @@ BookingEntity _bookingFromMap(
     createdAt: _dateFromFirestore(
       json['createdAt'],
     ),
+
+    // Bookings created before payment confirmation existed have no
+    // paymentStatus; their tickets were already issued, so treat them as paid.
+    paymentStatus: json['paymentStatus'] == PaymentStatus.pending.name
+        ? PaymentStatus.pending
+        : PaymentStatus.paid,
   );
 }
 

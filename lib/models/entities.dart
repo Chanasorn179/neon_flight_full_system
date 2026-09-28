@@ -6,6 +6,10 @@ enum BookingStatus { upcoming, completed, cancelled }
 
 enum PaymentMethod { promptPay, card, mobileBanking }
 
+/// Only the server (backend/scripts/payments.js) may set [paid]; Firestore
+/// rules reject any client write that changes it.
+enum PaymentStatus { pending, paid }
+
 extension CabinClassX on CabinClass {
   String get labelEn => switch (this) {
     CabinClass.economy => 'Economy',
@@ -174,6 +178,7 @@ class BookingEntity {
     required this.paymentMethod,
     required this.status,
     required this.createdAt,
+    this.paymentStatus = PaymentStatus.pending,
   });
   final String id;
   final String userId;
@@ -185,6 +190,23 @@ class BookingEntity {
   final PaymentMethod paymentMethod;
   final BookingStatus status;
   final DateTime createdAt;
+  final PaymentStatus paymentStatus;
+
+  bool get isPaid => paymentStatus == PaymentStatus.paid;
+
+  BookingEntity withPaymentStatus(PaymentStatus value) => BookingEntity(
+        id: id,
+        userId: userId,
+        flight: flight,
+        cabinClass: cabinClass,
+        passengers: passengers,
+        seats: seats,
+        fare: fare,
+        paymentMethod: paymentMethod,
+        status: status,
+        createdAt: createdAt,
+        paymentStatus: value,
+      );
 }
 
 class GpsLocationEntity {

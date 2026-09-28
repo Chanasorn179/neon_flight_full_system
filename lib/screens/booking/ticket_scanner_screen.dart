@@ -57,22 +57,25 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
     final bookingId = localResult.data!['bookingId']?.toString() ?? '';
 
     try {
-      final booking = await FirebaseService.bookingById(bookingId);
+      // Only the server creates publicTickets, and only after payment is
+      // confirmed, so a missing record means unpaid or forged.
+      final ticket = await FirebaseService.publicTicket(bookingId);
 
       if (!mounted) return;
 
-      if (booking == null) {
+      if (ticket == null) {
         setState(() => checking = false);
 
         await _showResult(
           valid: false,
           title: 'ไม่พบตั๋วในระบบ',
-          message: 'Booking ID $bookingId ไม่มีอยู่ใน Firestore',
+          message:
+              'Booking ID $bookingId ยังไม่ได้ยืนยันการชำระเงิน หรือไม่มีอยู่ในระบบ',
         );
         return;
       }
 
-      final status = booking['status']?.toString().toLowerCase() ?? '';
+      final status = ticket['status']?.toString().toLowerCase() ?? '';
 
       if (status == 'cancelled') {
         setState(() => checking = false);
@@ -81,7 +84,7 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
           valid: false,
           title: 'ตั๋วถูกยกเลิก',
           message: 'Booking ID $bookingId ถูกยกเลิกแล้ว',
-          booking: booking,
+          ticket: ticket,
         );
         return;
       }
@@ -91,8 +94,8 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
       await _showResult(
         valid: true,
         title: 'ตั๋วถูกต้อง',
-        message: 'ตรวจสอบ QR และข้อมูลใน Firestore สำเร็จ',
-        booking: booking,
+        message: 'ชำระเงินแล้ว และตรวจสอบกับระบบสำเร็จ',
+        ticket: ticket,
       );
     } catch (error) {
       if (!mounted) return;
@@ -111,39 +114,9 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
     required bool valid,
     required String title,
     required String message,
-    Map<String, dynamic>? booking,
+    Map<String, dynamic>? ticket,
   }) async {
-    final flight = booking?['flight'];
-    final flightMap = flight is Map
-        ? Map<String, dynamic>.from(flight)
-        : const <String, dynamic>{};
-
-    final departure = flightMap['departure'];
-    final arrival = flightMap['arrival'];
-
-    final departureMap = departure is Map
-        ? Map<String, dynamic>.from(departure)
-        : const <String, dynamic>{};
-
-    final arrivalMap = arrival is Map
-        ? Map<String, dynamic>.from(arrival)
-        : const <String, dynamic>{};
-
-    final passengersRaw = booking?['passengers'];
-    final passengers = passengersRaw is List ? passengersRaw : const [];
-
-    String passengerName = '-';
-
-    if (passengers.isNotEmpty && passengers.first is Map) {
-      final p = Map<String, dynamic>.from(passengers.first as Map);
-      passengerName = [
-        p['title'],
-        p['firstName'],
-        p['lastName'],
-      ].where((e) => e != null && e.toString().trim().isNotEmpty).join(' ');
-    }
-
-    final seatsRaw = booking?['seats'];
+    final seatsRaw = ticket?['seats'];
     final seats = seatsRaw is List
         ? seatsRaw.map((e) => e.toString()).join(', ')
         : '-';
@@ -167,26 +140,26 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
             children: [
               Text(message),
 
-              if (booking != null) ...[
+              if (ticket != null) ...[
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 8),
 
                 _line(
                   'Booking ID',
-                  booking['id']?.toString() ?? '-',
+                  ticket['bookingId']?.toString() ?? '-',
                 ),
                 _line(
                   'เที่ยวบิน',
-                  flightMap['flightNumber']?.toString() ?? '-',
+                  ticket['flightNumber']?.toString() ?? '-',
                 ),
                 _line(
                   'เส้นทาง',
-                  '${departureMap['code'] ?? '-'} → ${arrivalMap['code'] ?? '-'}',
+                  '${ticket['departureCode'] ?? '-'} → ${ticket['arrivalCode'] ?? '-'}',
                 ),
                 _line(
                   'ผู้โดยสาร',
-                  passengerName,
+                  ticket['passengerName']?.toString() ?? '-',
                 ),
                 _line(
                   'ที่นั่ง',
@@ -194,11 +167,11 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
                 ),
                 _line(
                   'ชั้นโดยสาร',
-                  booking['cabinClass']?.toString() ?? '-',
+                  ticket['cabinClass']?.toString() ?? '-',
                 ),
                 _line(
                   'สถานะ',
-                  booking['status']?.toString() ?? '-',
+                  ticket['status']?.toString() ?? '-',
                 ),
               ],
             ],

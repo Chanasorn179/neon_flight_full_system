@@ -98,19 +98,14 @@ class FirebaseService {
       bookingData['createdAt'],
     );
 
+    // Plain create: firestore.rules only accepts new bookings with
+    // paymentStatus 'pending'. The ticket is issued after payment is confirmed.
     await firestore.collection('bookings').doc(id).set(
       {
         ...bookingData,
         'id': id,
         'updatedAt': FieldValue.serverTimestamp(),
       },
-      SetOptions(merge: true),
-    );
-
-    // Public verification document used by the hosted ticket-check page.
-    await _savePublicTicket(
-      bookingData,
-      id,
     );
   }
 
@@ -192,246 +187,39 @@ class FirebaseService {
   }
 
   // ---------------------------------------------------------------------------
-  // Public E-Ticket verification
+  // Payment confirmation and public E-Ticket verification
+  //
+  // The app never writes publicTickets or paymentStatus = 'paid'. Both are set
+  // by backend/scripts/payments.js after an admin confirms the payment, and
+  // firestore.rules rejects client writes to them.
   // ---------------------------------------------------------------------------
 
-  static Future<void> _savePublicTicket(
-      Map<String, dynamic> data,
-      String bookingId,
-      ) async {
-    final flight = _asStringMap(data['flight']);
+  /// Emits the booking's payment status whenever it changes.
+  static Stream<PaymentStatus> watchPaymentStatus(String bookingId) {
+    if (!enabled) return const Stream<PaymentStatus>.empty();
 
-    final departureCode = _readAirportCode(
-      bookingData: data,
-      flight: flight,
-      nestedKeys: const [
-        'departure',
-        'origin',
-        'from',
-      ],
-      flatKeys: const [
-        'departureCode',
-        'originCode',
-        'fromCode',
-        'depIata',
-        'dep_iata',
-      ],
-    );
-
-    final arrivalCode = _readAirportCode(
-      bookingData: data,
-      flight: flight,
-      nestedKeys: const [
-        'arrival',
-        'destination',
-        'to',
-      ],
-      flatKeys: const [
-        'arrivalCode',
-        'destinationCode',
-        'toCode',
-        'arrIata',
-        'arr_iata',
-      ],
-    );
-
-    final flightNumber = _firstText(
-      [
-        flight['flightNumber'],
-        flight['number'],
-        data['flightNumber'],
-      ],
-      fallback: '-',
-    );
-
-    final passengersRaw = data['passengers'];
-    final passengers = passengersRaw is List
-        ? passengersRaw
-        : const [];
-
-    String passengerName = '-';
-
-    if (passengers.isNotEmpty) {
-      final passenger = _asStringMap(passengers.first);
-
-      passengerName = [
-        passenger['title'],
-        passenger['firstName'],
-        passenger['lastName'],
-      ]
-          .where(
-            (value) =>
-        value != null &&
-            value.toString().trim().isNotEmpty,
-      )
-          .map(
-            (value) => value.toString().trim(),
-      )
-          .join(' ');
-
-      if (passengerName.isEmpty) {
-        passengerName = _firstText(
-          [
-            passenger['fullName'],
-            passenger['name'],
-          ],
-          fallback: '-',
-        );
-      }
-    }
-
-    final seatsRaw = data['seats'];
-    final seats = seatsRaw is List
-        ? seatsRaw
+    return firestore
+        .collection('bookings')
+        .doc(bookingId)
+        .snapshots()
         .map(
-          (seat) => seat.toString().trim(),
-    )
-        .where(
-          (seat) => seat.isNotEmpty,
-    )
-        .toList()
-        : <String>[];
+          (doc) => doc.data()?['paymentStatus'] == PaymentStatus.pending.name
+              ? PaymentStatus.pending
+              : PaymentStatus.paid,
+        );
+  }
 
-    final documentId = TicketQrService.publicDocumentId(
-      bookingId,
-    );
+  /// Reads the public verification record. Anyone may `get` a single ticket by
+  /// its tokenized ID, so this works for staff scanning another user's ticket.
+  static Future<Map<String, dynamic>?> publicTicket(String bookingId) async {
+    if (!enabled) return null;
 
-    await firestore
+    final doc = await firestore
         .collection('publicTickets')
-        .doc(documentId)
-        .set(
-      {
-        'bookingId': bookingId,
-        'flightNumber': flightNumber,
-        'departureCode': departureCode,
-        'arrivalCode': arrivalCode,
-        'passengerName': passengerName,
-        'seats': seats,
-        'cabinClass': _firstText(
-          [
-            data['cabinClass'],
-            data['class'],
-          ],
-          fallback: '-',
-        ),
-        'status': _firstText(
-          [
-            data['status'],
-          ],
-          fallback: 'upcoming',
-        ),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-  }
+        .doc(TicketQrService.publicDocumentId(bookingId))
+        .get();
 
-  /// Rebuilds the public verification record for an existing booking.
-  ///
-  /// Useful for bookings created before `publicTickets` was introduced or
-  /// before the airport-code extraction fix.
-  static Future<bool> rebuildPublicTicket(
-      String bookingId,
-      ) async {
-    if (!enabled) return false;
-
-    final booking = await bookingById(bookingId);
-    if (booking == null) return false;
-
-    await _savePublicTicket(
-      booking,
-      bookingId,
-    );
-
-    return true;
-  }
-
-  static String _readAirportCode({
-    required Map<String, dynamic> bookingData,
-    required Map<String, dynamic> flight,
-    required List<String> nestedKeys,
-    required List<String> flatKeys,
-  }) {
-    // 1) flight.departure.code / flight.arrival.code
-    //    and compatible alternatives.
-    for (final key in nestedKeys) {
-      final nested = _asStringMap(flight[key]);
-
-      final code = _firstText(
-        [
-          nested['code'],
-          nested['iata'],
-          nested['iataCode'],
-          nested['iata_code'],
-          nested['airportCode'],
-        ],
-      );
-
-      if (code.isNotEmpty) {
-        return code.toUpperCase();
-      }
-
-      // Some sources use a String directly, for example:
-      // "departure": "CNX"
-      final direct = flight[key];
-
-      if (direct is String) {
-        final value = direct.trim();
-
-        if (_looksLikeIata(value)) {
-          return value.toUpperCase();
-        }
-      }
-    }
-
-    // 2) flight.departureCode / flight.arrivalCode etc.
-    for (final key in flatKeys) {
-      final value = flight[key]?.toString().trim() ?? '';
-
-      if (value.isNotEmpty) {
-        return value.toUpperCase();
-      }
-    }
-
-    // 3) Top-level booking fallback.
-    for (final key in flatKeys) {
-      final value = bookingData[key]?.toString().trim() ?? '';
-
-      if (value.isNotEmpty) {
-        return value.toUpperCase();
-      }
-    }
-
-    // 4) Top-level booking nested fallback.
-    for (final key in nestedKeys) {
-      final nested = _asStringMap(bookingData[key]);
-
-      final code = _firstText(
-        [
-          nested['code'],
-          nested['iata'],
-          nested['iataCode'],
-          nested['iata_code'],
-          nested['airportCode'],
-        ],
-      );
-
-      if (code.isNotEmpty) {
-        return code.toUpperCase();
-      }
-
-      final direct = bookingData[key];
-
-      if (direct is String) {
-        final value = direct.trim();
-
-        if (_looksLikeIata(value)) {
-          return value.toUpperCase();
-        }
-      }
-    }
-
-    return '-';
+    return doc.data();
   }
 
   // ---------------------------------------------------------------------------
@@ -646,39 +434,6 @@ class FirebaseService {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
-
-  static Map<String, dynamic> _asStringMap(dynamic value) {
-    if (value is Map<String, dynamic>) {
-      return value;
-    }
-
-    if (value is Map) {
-      return Map<String, dynamic>.from(value);
-    }
-
-    return const <String, dynamic>{};
-  }
-
-  static String _firstText(
-      List<dynamic> values, {
-        String fallback = '',
-      }) {
-    for (final value in values) {
-      if (value == null) continue;
-
-      final text = value.toString().trim();
-
-      if (text.isNotEmpty && text != '-') {
-        return text;
-      }
-    }
-
-    return fallback;
-  }
-
-  static bool _looksLikeIata(String value) {
-    return RegExp(r'^[A-Za-z]{3}$').hasMatch(value.trim());
-  }
 
   static dynamic _toFirestoreTimestamp(dynamic value) {
     if (value == null) {
