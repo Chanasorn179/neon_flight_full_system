@@ -14,8 +14,17 @@ import 'package:mini_projects/repositories/flight_repository.dart';
 import 'package:mini_projects/screens/booking/booking_history_screen.dart';
 import 'package:mini_projects/screens/home/airport_transfer_section.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 void main() {
+  setUp(() {
+    // SettingsProvider uses SharedPreferencesAsync, which has no platform
+    // implementation in widget tests.
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+  });
+
   testWidgets('Neon Flight login screen renders', (tester) async {
     final api = MockApi();
     await tester.pumpWidget(

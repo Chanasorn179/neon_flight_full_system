@@ -529,6 +529,7 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                       if (distanceToAirportKm != null) ...[
                         const SizedBox(height: 14),
                         Container(
+                          key: const ValueKey('transfer-service-area-status'),
                           width: double.infinity,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
