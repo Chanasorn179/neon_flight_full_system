@@ -47,12 +47,55 @@ class AirportEntity {
     required this.cityTh,
     required this.nameEn,
     required this.nameTh,
+    this.icao = '',
+    this.countryCode = 'TH',
+    this.rank = 0,
+    this.passengers12m = 0,
   });
   final String code;
   final String cityEn;
   final String cityTh;
   final String nameEn;
   final String nameTh;
+  final String icao;
+  final String countryCode;
+
+  /// Rank by passengers over the last 12 months (0 = no statistics).
+  final int rank;
+  final int passengers12m;
+
+  bool get isDomestic => countryCode == 'TH';
+
+  factory AirportEntity.fromJson(Map<String, dynamic> json) => AirportEntity(
+        code: json['code'].toString(),
+        cityEn: json['cityEn']?.toString() ?? json['code'].toString(),
+        cityTh: json['cityTh']?.toString() ?? json['code'].toString(),
+        nameEn: json['nameEn']?.toString() ?? json['code'].toString(),
+        nameTh: json['nameTh']?.toString() ?? json['code'].toString(),
+        icao: json['icao']?.toString() ?? '',
+        countryCode: json['countryCode']?.toString() ?? 'TH',
+        rank: (json['rank'] as num?)?.toInt() ?? 0,
+        passengers12m: (json['passengers12m'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class AirlineEntity {
+  const AirlineEntity({
+    required this.code,
+    required this.nameEn,
+    required this.nameTh,
+    required this.hubs,
+    required this.international,
+    required this.color,
+  });
+  final String code;
+  final String nameEn;
+  final String nameTh;
+  final List<String> hubs;
+  final bool international;
+
+  /// ARGB brand-ish color used for the airline badge.
+  final int color;
 }
 
 class FlightEntity {

@@ -78,3 +78,6 @@ REPAIR_*.ps1
 devtools_options.yaml
 
 SETUP_5_6.md
+# Firebase service-account keys
+*service-account*.json
+*-firebase-adminsdk-*.json

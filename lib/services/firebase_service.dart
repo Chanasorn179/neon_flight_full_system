@@ -44,6 +44,21 @@ class FirebaseService {
   }
 
   // ---------------------------------------------------------------------------
+  // Reference data (seeded by backend/scripts/seed_firestore.js)
+  // ---------------------------------------------------------------------------
+
+  /// Thai airports ranked by passengers, followed by international ones.
+  static Future<List<AirportEntity>> airports() async {
+    final snapshot = await firestore.collection('airports').get();
+    final list = snapshot.docs
+        .map((doc) => AirportEntity.fromJson(doc.data()))
+        .toList();
+    int order(AirportEntity a) => a.rank == 0 ? 1 << 30 : a.rank;
+    list.sort((a, b) => order(a).compareTo(order(b)));
+    return list;
+  }
+
+  // ---------------------------------------------------------------------------
   // Users
   // ---------------------------------------------------------------------------
 

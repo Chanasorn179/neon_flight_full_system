@@ -200,7 +200,10 @@ class DashboardScreen extends StatelessWidget {
               spacing: 12,
               runSpacing: 12,
               children: [
-                for (final airport in provider.airports.where((a) => a.code != 'BKK'))
+                // Top domestic airports by real passenger traffic.
+                for (final airport in provider.airports
+                    .where((a) => a.isDomestic && a.code != 'BKK' && a.code != 'DMK')
+                    .take(8))
                   _DestinationChip(
                     label: cityName(
                       lang,

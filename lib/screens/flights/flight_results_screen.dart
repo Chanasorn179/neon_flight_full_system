@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
+import '../../data/thai_airlines.dart';
 import '../../models/entities.dart';
 import '../../providers/flight_provider.dart';
 import '../../providers/language_provider.dart';
@@ -114,6 +115,7 @@ class FlightCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final h = flight.duration.inHours;
     final m = flight.duration.inMinutes.remainder(60);
+    final airline = airlineForFlight(flight.airline, flight.flightNumber);
 
     return Card(
       child: Padding(
@@ -122,13 +124,18 @@ class FlightCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(child: Text(flight.airline.substring(0, 1))),
+                _AirlineBadge(airline: airline, fallback: flight.airline),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(flight.airline, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(
+                        airline == null
+                            ? flight.airline
+                            : (lang == 'th' ? airline.nameTh : airline.nameEn),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       Text(flight.flightNumber),
                     ],
                   ),
@@ -203,3 +210,31 @@ String _cabin(String lang, CabinClass c) => switch (c) {
       CabinClass.business => tr(lang, 'business'),
       CabinClass.first => tr(lang, 'first'),
     };
+
+class _AirlineBadge extends StatelessWidget {
+  const _AirlineBadge({required this.airline, required this.fallback});
+
+  final AirlineEntity? airline;
+  final String fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = airline == null
+        ? Theme.of(context).colorScheme.primary
+        : Color(airline!.color);
+    final onColor =
+        color.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
+    return Semantics(
+      label: airline?.nameEn ?? fallback,
+      excludeSemantics: true,
+      child: CircleAvatar(
+        radius: 22,
+        backgroundColor: color,
+        child: Text(
+          airline?.code ?? (fallback.isEmpty ? '?' : fallback.substring(0, 1)),
+          style: TextStyle(color: onColor, fontWeight: FontWeight.w800),
+        ),
+      ),
+    );
+  }
+}

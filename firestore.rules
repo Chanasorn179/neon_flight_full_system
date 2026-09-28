@@ -87,6 +87,23 @@ service cloud.firestore {
         ).data.userId == request.auth.uid;
     }
 
+    // Public reference data, written only by backend/scripts/seed_firestore.js
+    // (Admin SDK bypasses these rules).
+    match /airports/{code} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /airlines/{code} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /airportStats/{code} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

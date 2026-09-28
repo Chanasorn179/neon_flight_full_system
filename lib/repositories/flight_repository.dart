@@ -1,6 +1,7 @@
 import '../data/mock_api.dart';
 import '../models/entities.dart';
 import '../services/aviation_api_service.dart';
+import '../services/firebase_service.dart';
 
 abstract class FlightRepository {
   Future<List<AirportEntity>> airports();
@@ -15,7 +16,15 @@ class HybridFlightRepository implements FlightRepository {
   final AviationApiService aviation;
 
   @override
-  Future<List<AirportEntity>> airports() async => api.airports;
+  Future<List<AirportEntity>> airports() async {
+    if (!FirebaseService.enabled) return api.airports;
+    try {
+      final remote = await FirebaseService.airports();
+      return remote.isEmpty ? api.airports : remote;
+    } catch (_) {
+      return api.airports;
+    }
+  }
 
   @override
   Future<List<FlightEntity>> search(

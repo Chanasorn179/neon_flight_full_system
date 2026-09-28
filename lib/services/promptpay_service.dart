@@ -1,5 +1,5 @@
 class PromptPayService {
-  static const merchantId = String.fromEnvironment('PROMPTPAY_ID', defaultValue: '0885933820');
+  static const merchantId = String.fromEnvironment('PROMPTPAY_ID', defaultValue: '');
 
   static bool get configured => merchantId.trim().isNotEmpty;
 

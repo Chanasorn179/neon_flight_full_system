@@ -41,6 +41,13 @@ npm test           # node --test (server.test.js, line_dispatch.test.js)
 
 Backend env vars: `AVIATIONSTACK_API_KEY`, `JWT_SECRET`, `DISPATCH_API_KEY`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_DRIVER_TARGET_ID`, `PORT`. `GET /api/health` reports whether Aviationstack is configured.
 
+Airport/airline reference data (regenerate when the statistics CSV is updated):
+
+```bash
+python tool/build_airport_data.py "<path to Air_Transport_Statistics_External_Monthly(All_External_Data).csv>"
+cd backend && node scripts/seed_firestore.js --write   # needs GOOGLE_APPLICATION_CREDENTIALS (service-account key)
+```
+
 Firebase (project `neon-flight`):
 
 ```bash
@@ -51,6 +58,7 @@ firebase deploy --only hosting,firestore:rules
 
 - **Composition root is `lib/main.dart`.** It calls `FirebaseService.initialize()`. If that succeeds, `FirebaseService.enabled` is true and the Firebase repositories are used. If it fails, the app silently switches to the `Mock*Repository` implementations backed by `data/mock_api.dart`. When auth or bookings "don't persist", check `FirebaseService.initializationError` first.
 - **Layers:** `screens/` → `providers/` (ChangeNotifier, via `provider`'s `MultiProvider`) → `repositories/` (abstract interface + Firebase/Mock/Hybrid implementations) → `services/` (Firebase, HTTP, QR, PromptPay). All models are in `models/entities.dart`. The code uses normal imports only, with no `part`/`part of`.
+- **Reference data:** `lib/data/thai_airports.dart` is generated from AOT/DOA airport traffic statistics (ranked by passengers over the latest 12 months). The same data is seeded into the Firestore collections `airports`, `airlines` and `airportStats`, which are public read-only. `FlightRepository.airports()` reads Firestore and falls back to the bundled list. `lib/data/thai_airlines.dart` holds the Thai carriers and must stay in sync with `AIRLINES` in the generator. The dataset has no airlines, routes or fares, so mock schedules (`MockApi.searchFlights`) assign carriers by hub (`airlinesForRoute`) and are demo data.
 - **Flights:** `HybridFlightRepository` goes through the backend (which proxies Aviationstack so the key stays server-side) and falls back to mock data. Aviationstack has no fares, so prices are demo values (`pricingSource: demo`).
 - **E-tickets:** `TicketQrService` derives a 12-char token from the booking ID. The QR encodes `https://neon-flight.web.app/t/{bookingId}?token=...`. A public copy is written to `publicTickets/{bookingId_token}`, kept separate from the private `bookings/{id}`. Firebase Hosting serves `web_ticket/` (static verifier page) and rewrites `/t/**` → `index.html`. Changing the token scheme breaks tickets that were already issued.
 - **Airport transfers:** `TransferDispatchService` POSTs to the backend `/api/transfer-bookings`. The backend stores the booking and pushes it to the driver through the LINE Messaging API (`line_dispatch.js`). The LINE token never ships in the app.

@@ -12,7 +12,7 @@ class FlightProvider extends ChangeNotifier {
   bool loading = false;
   String? error;
   String from = 'BKK';
-  String to = 'NRT';
+  String to = 'CNX';
   DateTime departureDate = DateTime.now().add(const Duration(days: 14));
   DateTime? returnDate;
   TripType tripType = TripType.oneWay;

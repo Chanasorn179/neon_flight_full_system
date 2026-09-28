@@ -1,5 +1,7 @@
 import 'dart:math';
 import '../models/entities.dart';
+import 'thai_airlines.dart';
+import 'thai_airports.dart';
 
 class MockApi {
   final _random = Random(42);
@@ -12,57 +14,7 @@ class MockApi {
   ];
   final List<BookingEntity> _bookings = [];
 
-  final airports = const [
-    AirportEntity(
-      code: 'BKK',
-      cityEn: 'Bangkok',
-      cityTh: 'กรุงเทพฯ',
-      nameEn: 'Suvarnabhumi',
-      nameTh: 'สุวรรณภูมิ',
-    ),
-    AirportEntity(
-      code: 'CNX',
-      cityEn: 'Chiang Mai',
-      cityTh: 'เชียงใหม่',
-      nameEn: 'Chiang Mai',
-      nameTh: 'เชียงใหม่',
-    ),
-    AirportEntity(
-      code: 'HKT',
-      cityEn: 'Phuket',
-      cityTh: 'ภูเก็ต',
-      nameEn: 'Phuket',
-      nameTh: 'ภูเก็ต',
-    ),
-    AirportEntity(
-      code: 'NRT',
-      cityEn: 'Tokyo',
-      cityTh: 'โตเกียว',
-      nameEn: 'Narita',
-      nameTh: 'นาริตะ',
-    ),
-    AirportEntity(
-      code: 'ICN',
-      cityEn: 'Seoul',
-      cityTh: 'โซล',
-      nameEn: 'Incheon',
-      nameTh: 'อินชอน',
-    ),
-    AirportEntity(
-      code: 'SIN',
-      cityEn: 'Singapore',
-      cityTh: 'สิงคโปร์',
-      nameEn: 'Changi',
-      nameTh: 'ชางงี',
-    ),
-    AirportEntity(
-      code: 'DMK',
-      cityEn: 'Bangkok',
-      cityTh: 'กรุงเทพฯ',
-      nameEn: 'Don Mueang',
-      nameTh: 'ดอนเมือง',
-    ),
-  ];
+  final List<AirportEntity> airports = thaiAirports;
 
   List<PromotionEntity> get promotions => const [
     PromotionEntity(
@@ -140,32 +92,65 @@ class MockApi {
     await _wait();
     final dep = airports.firstWhere((a) => a.code == from);
     final arr = airports.firstWhere((a) => a.code == to);
-    return List.generate(5, (i) {
-      final startHour = 6 + i * 3;
-      final depTime = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        startHour.clamp(0, 23).toInt(),
-        i.isEven ? 10 : 35,
-      );
-      final duration = Duration(
-        hours: 2 + _random.nextInt(4),
-        minutes: _random.nextBool() ? 15 : 45,
-      );
+    final carriers = airlinesForRoute(dep, arr);
+    final international = !dep.isDomestic || !arr.isDomestic;
+
+    // Busier airports (by real passenger statistics) get more daily departures.
+    final traffic = min(dep.passengers12m, arr.passengers12m);
+    final count = international
+        ? 4
+        : traffic > 5000000
+            ? 8
+            : traffic > 1000000
+                ? 6
+                : traffic > 300000
+                    ? 4
+                    : 2;
+    final blockMinutes = _blockMinutes[to] ?? _blockMinutes[from] ?? 75;
+
+    return List.generate(count, (i) {
+      final airline = carriers[i % carriers.length];
+      final depTime = DateTime(date.year, date.month, date.day, 6)
+          .add(Duration(minutes: i * (16 * 60 ~/ count) + _random.nextInt(4) * 10));
+      final duration = Duration(minutes: blockMinutes + _random.nextInt(3) * 5);
+      final baseFare = international
+          ? 3200 + blockMinutes * 18.0
+          : 900 + blockMinutes * 14.0;
+      final premium = airline.code == 'TG' || airline.code == 'PG' ? 1.35 : 1.0;
       return FlightEntity(
         id: '$from${to}_${date.millisecondsSinceEpoch}_$i',
-        airline: i.isEven ? 'Neon Air' : 'SkyJet',
-        flightNumber: i.isEven ? 'NF${120 + i}' : 'SJ${420 + i}',
+        airline: airline.nameEn,
+        flightNumber: '${airline.code}${100 + _random.nextInt(800)}',
         departure: dep,
         arrival: arr,
         departureTime: depTime,
         arrivalTime: depTime.add(duration),
-        basePrice: 1600 + i * 430.0 + _random.nextInt(300),
+        basePrice: (baseFare * premium + _random.nextInt(400)).roundToDouble(),
         availableSeats: 3 + _random.nextInt(18),
       );
     });
   }
+
+  /// Rough block times from Bangkok, used only for demo schedules.
+  static const _blockMinutes = <String, int>{
+    'NRT': 370,
+    'ICN': 350,
+    'SIN': 145,
+    'HKT': 85,
+    'USM': 70,
+    'KBV': 80,
+    'HDY': 85,
+    'NAW': 100,
+    'BTZ': 105,
+    'TST': 85,
+    'NST': 75,
+    'URT': 70,
+    'CNX': 75,
+    'CEI': 80,
+    'NNT': 75,
+    'UTP': 40,
+    'HHQ': 40,
+  };
 
   Future<BookingEntity> createBooking(BookingEntity booking) async {
     await _wait();
