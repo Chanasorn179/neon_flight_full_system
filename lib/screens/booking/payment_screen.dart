@@ -8,6 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/booking_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../services/promptpay_service.dart';
+import '../../widgets/airline_logo.dart';
 import '../../widgets/app_widgets.dart';
 import 'ticket_screen.dart';
 
@@ -86,9 +87,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${widget.flight.departure.code} → ${widget.flight.arrival.code}',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                  Row(
+                    children: [
+                      AirlineLogo(
+                        airlineName: widget.flight.airline,
+                        flightNumber: widget.flight.flightNumber,
+                        size: 40,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${widget.flight.departure.code} → ${widget.flight.arrival.code}',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                    ],
                   ),
                   Text('${widget.flight.airline} · ${widget.flight.flightNumber} · ${_cabin(lang, widget.cabinClass)}'),
                   const SizedBox(height: 8),

@@ -6,6 +6,7 @@ import '../../models/entities.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/booking_provider.dart';
 import '../../providers/language_provider.dart';
+import '../../widgets/airline_logo.dart';
 import '../../widgets/app_widgets.dart';
 import 'ticket_screen.dart';
 
@@ -298,9 +299,10 @@ class _FlightBookingCard extends StatelessWidget {
                     color: theme.colorScheme.primaryContainer.withValues(alpha: .6),
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  child: Icon(
-                    Icons.flight_rounded,
-                    color: theme.colorScheme.primary,
+                  padding: const EdgeInsets.all(4),
+                  child: AirlineLogo(
+                    airlineName: booking.flight.airline,
+                    flightNumber: booking.flight.flightNumber,
                   ),
                 ),
                 const SizedBox(width: 12),

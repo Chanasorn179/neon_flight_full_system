@@ -6,6 +6,7 @@ import '../../data/thai_airlines.dart';
 import '../../models/entities.dart';
 import '../../providers/flight_provider.dart';
 import '../../providers/language_provider.dart';
+import '../../widgets/airline_logo.dart';
 import '../../widgets/app_widgets.dart';
 import '../booking/passenger_screen.dart';
 
@@ -124,7 +125,10 @@ class FlightCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                _AirlineBadge(airline: airline, fallback: flight.airline),
+                AirlineLogo(
+                  airlineName: flight.airline,
+                  flightNumber: flight.flightNumber,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -211,30 +215,3 @@ String _cabin(String lang, CabinClass c) => switch (c) {
       CabinClass.first => tr(lang, 'first'),
     };
 
-class _AirlineBadge extends StatelessWidget {
-  const _AirlineBadge({required this.airline, required this.fallback});
-
-  final AirlineEntity? airline;
-  final String fallback;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = airline == null
-        ? Theme.of(context).colorScheme.primary
-        : Color(airline!.color);
-    final onColor =
-        color.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
-    return Semantics(
-      label: airline?.nameEn ?? fallback,
-      excludeSemantics: true,
-      child: CircleAvatar(
-        radius: 22,
-        backgroundColor: color,
-        child: Text(
-          airline?.code ?? (fallback.isEmpty ? '?' : fallback.substring(0, 1)),
-          style: TextStyle(color: onColor, fontWeight: FontWeight.w800),
-        ),
-      ),
-    );
-  }
-}

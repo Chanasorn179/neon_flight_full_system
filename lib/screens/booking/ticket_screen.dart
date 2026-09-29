@@ -7,6 +7,7 @@ import '../../models/entities.dart';
 import '../../providers/language_provider.dart';
 import '../../services/firebase_service.dart';
 import '../../services/ticket_qr_service.dart';
+import '../../widgets/airline_logo.dart';
 import '../../widgets/app_widgets.dart';
 import 'ticket_scanner_screen.dart';
 
@@ -46,10 +47,10 @@ class TicketScreen extends StatelessWidget {
                     padding: const EdgeInsets.all(22),
                     child: Column(
                       children: [
-                        const Icon(
-                          Icons.flight_takeoff,
-                          size: 46,
-                          color: Color(0xFF0A66C2),
+                        AirlineLogo(
+                          airlineName: booking.flight.airline,
+                          flightNumber: booking.flight.flightNumber,
+                          size: 56,
                         ),
                         const Text(
                           'NEON FLIGHT',
