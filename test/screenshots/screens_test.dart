@@ -60,6 +60,20 @@ final passenger = PassengerEntity(
   email: 'anong@example.com',
 );
 
+extension on PassengerEntity {
+  PassengerEntity copyWithName(String first) => PassengerEntity(
+        title: title,
+        firstName: first,
+        lastName: lastName,
+        birthDate: birthDate,
+        nationality: nationality,
+        passportNumber: passportNumber,
+        passportExpiry: passportExpiry,
+        phone: phone,
+        email: email,
+      );
+}
+
 void main() {
   late MockApi api;
   late AuthProvider auth;
@@ -92,10 +106,12 @@ void main() {
     Widget Function() screen, {
     bool loggedIn = true,
     Future<void> Function()? prepare,
+    Future<void> Function(WidgetTester tester)? act,
+    Size size = _phone,
   }) async {
     for (final mode in [ThemeMode.light, ThemeMode.dark]) {
-      await tester.binding.setSurfaceSize(_phone);
-      tester.view.physicalSize = _phone * 3;
+      await tester.binding.setSurfaceSize(size);
+      tester.view.physicalSize = size * 3;
       tester.view.devicePixelRatio = 3;
       await tester.runAsync(() async {
         if (loggedIn && auth.currentUser == null) {
@@ -134,6 +150,12 @@ void main() {
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
+      if (act != null) {
+        await act(tester);
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+      }
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('out/${name}_${mode.name}.png'),
@@ -161,6 +183,34 @@ void main() {
           cabinClass: CabinClass.economy,
           passengers: [passenger],
         ),
+      ));
+  testWidgets('seats_full', (t) => shoot(
+        t,
+        'seats_full',
+        size: const Size(390, 1500),
+        () => SeatSelectionScreen(
+          flight: flight,
+          cabinClass: CabinClass.economy,
+          passengers: [
+            passenger,
+            passenger.copyWithName('Somchai'),
+            passenger.copyWithName('Mali'),
+          ],
+        ),
+        act: (t) async {
+          await t.tap(find.bySemanticsLabel('Seat 4C'));
+          await t.tap(find.bySemanticsLabel('Seat 4D'));
+        },
+      ));
+  testWidgets('seats_business', (t) => shoot(
+        t,
+        'seats_business',
+        () => SeatSelectionScreen(
+          flight: flight,
+          cabinClass: CabinClass.business,
+          passengers: [passenger],
+        ),
+        act: (t) async => t.tap(find.bySemanticsLabel('Seat 2C')),
       ));
   testWidgets('payment', (t) => shoot(
         t,
