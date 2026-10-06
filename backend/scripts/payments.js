@@ -12,6 +12,9 @@
 //   node scripts/payments.js list
 //   node scripts/payments.js confirm NF12345678
 //   node scripts/payments.js reject NF12345678
+//
+// The same functions back the admin web page (admin.js, /admin).
+// A round trip is confirmed or rejected as a whole (both legs share tripId).
 
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -44,76 +47,131 @@ function publicTicketFor(bookingId, booking) {
   };
 }
 
-async function list(db) {
-  const snapshot = await db
-    .collection('bookings')
-    .where('paymentStatus', '==', 'pending')
-    .get();
-  const rows = snapshot.docs
-    .map((doc) => doc.data())
-    .filter((b) => b.status !== 'cancelled');
-
-  if (rows.length === 0) {
-    console.log('No bookings waiting for payment.');
-    return;
-  }
-  for (const b of rows) {
-    const created = b.createdAt?.toDate?.().toISOString() ?? '-';
-    const total = Number(b.fare?.total ?? 0).toLocaleString('th-TH');
-    console.log(
-      `${b.id}  ${total} THB  ${b.paymentMethod}  ${b.flight?.flightNumber ?? '-'}  created ${created}`,
-    );
-  }
+function toIso(value) {
+  if (!value) return null;
+  if (typeof value.toDate === 'function') return value.toDate().toISOString();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-async function confirm(db, bookingId) {
-  const bookingRef = db.collection('bookings').doc(bookingId);
-  const ticketRef = db.collection('publicTickets').doc(publicDocumentId(bookingId));
+// Plain summary of a booking for the admin list.
+function summarize(b) {
+  const flight = b.flight || {};
+  return {
+    id: b.id,
+    tripId: b.tripId || null,
+    userId: b.userId,
+    createdAt: toIso(b.createdAt),
+    flightNumber: text(flight.flightNumber),
+    airline: text(flight.airline),
+    from: text(b.departureCode || flight.departureCode),
+    to: text(b.arrivalCode || flight.arrivalCode),
+    departureTime: toIso(flight.departureTime),
+    cabinClass: text(b.cabinClass),
+    seats: (b.seats || []).map(String),
+    passengers: (b.passengers || []).map((p) =>
+      [p.title, p.firstName, p.lastName].map((v) => text(v, '')).filter(Boolean).join(' '),
+    ),
+    total: Number(b.fare?.total ?? 0),
+    paymentMethod: text(b.paymentMethod),
+    paymentStatus: text(b.paymentStatus, 'paid'),
+    status: text(b.status, 'upcoming'),
+  };
+}
 
+const LIST_QUERIES = {
+  pending: (db) => db.collection('bookings').where('paymentStatus', '==', 'pending'),
+  paid: (db) => db.collection('bookings').where('paymentStatus', '==', 'paid'),
+  cancelled: (db) => db.collection('bookings').where('status', '==', 'cancelled'),
+};
+
+// Bookings by state, newest first. "pending" excludes cancelled ones.
+async function list(db, state = 'pending', limit = 100) {
+  const query = LIST_QUERIES[state];
+  if (!query) throw new Error(`Unknown state ${state}`);
+  const snapshot = await query(db).get();
+  return snapshot.docs
+    .map((doc) => summarize({ id: doc.id, ...doc.data() }))
+    .filter((b) => state !== 'pending' || b.status !== 'cancelled')
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    .slice(0, limit);
+}
+
+// The booking and, for a round trip, its other leg (paid together).
+async function tripRefs(tx, db, bookingId) {
+  const ref = db.collection('bookings').doc(bookingId);
+  const snap = await tx.get(ref);
+  if (!snap.exists) throw new Error(`Booking ${bookingId} not found`);
+  const tripId = snap.data().tripId;
+  if (!tripId) return [snap];
+  const legs = await tx.get(db.collection('bookings').where('tripId', '==', tripId));
+  return legs.docs;
+}
+
+// Marks the booking (both legs of a round trip) paid and issues the public
+// ticket records. Returns the confirmed booking ids.
+async function confirm(db, bookingId, confirmedBy = 'admin') {
+  let confirmed = [];
   await db.runTransaction(async (tx) => {
-    const snap = await tx.get(bookingRef);
-    if (!snap.exists) throw new Error(`Booking ${bookingId} not found`);
-    const booking = snap.data();
-    if (booking.status === 'cancelled') throw new Error(`Booking ${bookingId} is cancelled`);
-    if (booking.paymentStatus !== 'pending') {
-      throw new Error(`Booking ${bookingId} is not pending (paymentStatus: ${booking.paymentStatus})`);
+    const legs = await tripRefs(tx, db, bookingId);
+    for (const leg of legs) {
+      const b = leg.data();
+      if (b.status === 'cancelled') throw new Error(`Booking ${leg.id} is cancelled`);
+      if (b.paymentStatus !== 'pending') {
+        throw new Error(`Booking ${leg.id} is not pending (paymentStatus: ${b.paymentStatus})`);
+      }
     }
-
-    tx.update(bookingRef, {
-      paymentStatus: 'paid',
-      paidAt: FieldValue.serverTimestamp(),
-      paymentConfirmedBy: 'admin-script',
-      ticketIssuedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    tx.set(ticketRef, {
-      ...publicTicketFor(bookingId, booking),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    for (const leg of legs) {
+      tx.update(leg.ref, {
+        paymentStatus: 'paid',
+        paidAt: FieldValue.serverTimestamp(),
+        paymentConfirmedBy: confirmedBy,
+        ticketIssuedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(db.collection('publicTickets').doc(publicDocumentId(leg.id)), {
+        ...publicTicketFor(leg.id, leg.data()),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    confirmed = legs.map((leg) => leg.id);
   });
-  console.log(`Confirmed ${bookingId}; ticket ${ticketRef.id} issued.`);
+  return confirmed;
 }
 
+// Cancels an unpaid booking (both legs of a round trip) and frees its seats.
+// Returns { cancelled: ids, released: seat count }.
 async function reject(db, bookingId) {
-  const bookingRef = db.collection('bookings').doc(bookingId);
-  const locksQuery = db.collection('seatLocks').where('bookingId', '==', bookingId);
-  let released = 0;
+  let result = { cancelled: [], released: 0 };
   await db.runTransaction(async (tx) => {
-    const snap = await tx.get(bookingRef);
-    if (!snap.exists) throw new Error(`Booking ${bookingId} not found`);
-    if (snap.data().paymentStatus !== 'pending') {
-      throw new Error(`Booking ${bookingId} is not pending; refund/cancel paid bookings manually`);
+    const legs = await tripRefs(tx, db, bookingId);
+    for (const leg of legs) {
+      if (leg.data().paymentStatus !== 'pending') {
+        throw new Error(`Booking ${leg.id} is not pending; refund/cancel paid bookings manually`);
+      }
     }
-    const locks = await tx.get(locksQuery);
-    tx.update(bookingRef, {
-      status: 'cancelled',
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    // Free the seats for other passengers.
+    const ids = legs.map((leg) => leg.id);
+    const locks = await tx.get(db.collection('seatLocks').where('bookingId', 'in', ids));
+    for (const leg of legs) {
+      tx.update(leg.ref, {
+        status: 'cancelled',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
     locks.forEach((lock) => tx.delete(lock.ref));
-    released = locks.size;
+    result = { cancelled: ids, released: locks.size };
   });
-  console.log(`Cancelled unpaid booking ${bookingId}; released ${released} seat(s).`);
+  return result;
+}
+
+let firestore;
+// Firestore through the Admin SDK (GOOGLE_APPLICATION_CREDENTIALS).
+function adminDb() {
+  if (!firestore) {
+    initializeApp({ credential: applicationDefault(), projectId: 'neon-flight' });
+    firestore = getFirestore();
+  }
+  return firestore;
 }
 
 async function main() {
@@ -122,13 +180,25 @@ async function main() {
     console.log('Usage: node scripts/payments.js list | confirm <bookingId> | reject <bookingId>');
     process.exit(1);
   }
+  const db = adminDb();
 
-  initializeApp({ credential: applicationDefault(), projectId: 'neon-flight' });
-  const db = getFirestore();
-
-  if (command === 'list') await list(db);
-  if (command === 'confirm') await confirm(db, bookingId.trim());
-  if (command === 'reject') await reject(db, bookingId.trim());
+  if (command === 'list') {
+    const rows = await list(db, 'pending');
+    if (rows.length === 0) console.log('No bookings waiting for payment.');
+    for (const b of rows) {
+      const total = b.total.toLocaleString('th-TH');
+      const trip = b.tripId ? `  trip ${b.tripId}` : '';
+      console.log(`${b.id}  ${total} THB  ${b.paymentMethod}  ${b.flightNumber}  created ${b.createdAt ?? '-'}${trip}`);
+    }
+  }
+  if (command === 'confirm') {
+    const ids = await confirm(db, bookingId.trim(), 'admin-script');
+    console.log(`Confirmed ${ids.join(', ')}; tickets issued.`);
+  }
+  if (command === 'reject') {
+    const { cancelled, released } = await reject(db, bookingId.trim());
+    console.log(`Cancelled ${cancelled.join(', ')}; released ${released} seat(s).`);
+  }
 }
 
 if (require.main === module) {
@@ -138,4 +208,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { publicTicketFor };
+module.exports = { publicTicketFor, summarize, list, confirm, reject, adminDb };

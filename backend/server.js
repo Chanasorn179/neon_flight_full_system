@@ -286,6 +286,26 @@ app.post('/api/transfer-bookings', async (req, res) => {
   }
 });
 
+// Payment confirmation for admins: page at /admin, API at /api/admin.
+const { createAdminRouter } = require('./admin');
+let paymentService;
+app.use('/api/admin', createAdminRouter({
+  adminKey: process.env.ADMIN_API_KEY || '',
+  service: () => {
+    if (!paymentService) {
+      const payments = require('./scripts/payments');
+      const firestore = payments.adminDb();
+      paymentService = {
+        list: (state) => payments.list(firestore, state),
+        confirm: (id, by) => payments.confirm(firestore, id, by),
+        reject: (id) => payments.reject(firestore, id),
+      };
+    }
+    return paymentService;
+  },
+}));
+app.use('/admin', express.static(path.join(__dirname, 'admin')));
+
 const port=process.env.PORT||5000;
 if (require.main === module) {
   app.listen(port, () =>
