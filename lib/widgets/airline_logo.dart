@@ -37,6 +37,21 @@ class AirlineLogo extends StatelessWidget {
               width: size,
               height: size,
               fit: BoxFit.contain,
+              // Logos are white tiles; round them and add a hairline so they
+              // read as tiles on both white cards and dark surfaces.
+              frameBuilder: (context, child, _, _) {
+                final radius = BorderRadius.circular(size * 0.22);
+                return DecoratedBox(
+                  position: DecorationPosition.foreground,
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
+                  child: ClipRRect(borderRadius: radius, child: child),
+                );
+              },
               errorBuilder: (_, _, _) => badge,
             ),
     );
