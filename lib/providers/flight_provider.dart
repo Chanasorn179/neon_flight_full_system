@@ -32,7 +32,12 @@ class FlightProvider extends ChangeNotifier {
   void setReturn(DateTime? value) { returnDate = value; notifyListeners(); }
   void setTripType(TripType value) { tripType = value; if (value == TripType.oneWay) returnDate = null; notifyListeners(); }
   void setCabin(CabinClass value) { cabinClass = value; notifyListeners(); }
-  void setPassengers(int a, int c) { adults = a; children = c; notifyListeners(); }
+  /// Airlines cap a single booking at 9 passengers; the seat-lock rules rely on it.
+  static const maxPassengers = 9;
+  void setPassengers(int a, int c) {
+    if (a < 1 || c < 0 || a + c > maxPassengers) return;
+    adults = a; children = c; notifyListeners();
+  }
   void setMaxPrice(double value) { maxPrice = value; notifyListeners(); }
   void setSort(String value) { sort = value; notifyListeners(); }
 

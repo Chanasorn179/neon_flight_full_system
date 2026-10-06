@@ -64,6 +64,24 @@ class _PaymentScreenState extends State<PaymentScreen> {
         MaterialPageRoute(builder: (_) => TicketScreen(booking: booking)),
         (route) => route.isFirst,
       );
+    } on SeatTakenException catch (error) {
+      if (!mounted) return;
+      final lang = context.read<LanguageProvider>().languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            trArgs(lang, 'seat_taken', {'seats': error.seats.join(', ')}),
+          ),
+        ),
+      );
+      // Back to the seat map, which reloads taken seats.
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      final lang = context.read<LanguageProvider>().languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr(lang, 'booking_failed'))),
+      );
     } finally {
       if (mounted) setState(() => paying = false);
     }

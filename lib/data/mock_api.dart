@@ -4,7 +4,6 @@ import 'thai_airlines.dart';
 import 'thai_airports.dart';
 
 class MockApi {
-  final _random = Random(42);
   final List<UserEntity> _users = [
     const UserEntity(
       id: 'u1',
@@ -108,25 +107,33 @@ class MockApi {
                     : 2;
     final blockMinutes = _blockMinutes[to] ?? _blockMinutes[from] ?? 75;
 
+    // Seeded by route and day so a search always returns the same schedule;
+    // seat locks rely on flight numbers being stable.
+    final rng = Random(
+      '$from$to${date.year}${date.month}${date.day}'
+          .codeUnits
+          .fold<int>(17, (h, c) => (h * 31 + c) & 0x7fffffff),
+    );
+
     return List.generate(count, (i) {
       final airline = carriers[i % carriers.length];
       final depTime = DateTime(date.year, date.month, date.day, 6)
-          .add(Duration(minutes: i * (16 * 60 ~/ count) + _random.nextInt(4) * 10));
-      final duration = Duration(minutes: blockMinutes + _random.nextInt(3) * 5);
+          .add(Duration(minutes: i * (16 * 60 ~/ count) + rng.nextInt(4) * 10));
+      final duration = Duration(minutes: blockMinutes + rng.nextInt(3) * 5);
       final baseFare = international
           ? 3200 + blockMinutes * 18.0
           : 900 + blockMinutes * 14.0;
       final premium = airline.code == 'TG' || airline.code == 'PG' ? 1.35 : 1.0;
       return FlightEntity(
-        id: '$from${to}_${date.millisecondsSinceEpoch}_$i',
+        id: '$from${to}_${date.year}${date.month}${date.day}_$i',
         airline: airline.nameEn,
-        flightNumber: '${airline.code}${100 + _random.nextInt(800)}',
+        flightNumber: '${airline.code}${100 + rng.nextInt(800)}',
         departure: dep,
         arrival: arr,
         departureTime: depTime,
         arrivalTime: depTime.add(duration),
-        basePrice: (baseFare * premium + _random.nextInt(400)).roundToDouble(),
-        availableSeats: 3 + _random.nextInt(18),
+        basePrice: (baseFare * premium + rng.nextInt(400)).roundToDouble(),
+        availableSeats: 3 + rng.nextInt(18),
       );
     });
   }
@@ -154,9 +161,19 @@ class MockApi {
 
   Future<BookingEntity> createBooking(BookingEntity booking) async {
     await _wait();
+    final clash = takenSeats(booking.flight.scheduleKey)
+        .intersection(booking.seats.toSet());
+    if (clash.isNotEmpty) throw SeatTakenException(clash);
     _bookings.add(booking);
     return booking;
   }
+
+  Set<String> takenSeats(String scheduleKey) => {
+        for (final b in _bookings)
+          if (b.flight.scheduleKey == scheduleKey &&
+              b.status != BookingStatus.cancelled)
+            ...b.seats,
+      };
 
   Future<List<BookingEntity>> bookings(String userId) async {
     await _wait();

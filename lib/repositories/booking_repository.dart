@@ -8,6 +8,9 @@ abstract class BookingRepository {
   Future<BookingEntity> create(BookingEntity booking);
 
   Future<List<BookingEntity>> forUser(String userId);
+
+  /// Seats already held by other bookings on the same departure.
+  Future<Set<String>> takenSeats(FlightEntity flight);
 }
 
 /// ใช้สำหรับโหมด Mock / Offline fallback
@@ -26,6 +29,10 @@ class MockBookingRepository implements BookingRepository {
   Future<List<BookingEntity>> forUser(String userId) {
     return api.bookings(userId);
   }
+
+  @override
+  Future<Set<String>> takenSeats(FlightEntity flight) async =>
+      api.takenSeats(flight.scheduleKey);
 }
 
 /// ใช้ Firebase Firestore จริง
@@ -45,6 +52,10 @@ class FirebaseBookingRepository implements BookingRepository {
 
     return booking;
   }
+
+  @override
+  Future<Set<String>> takenSeats(FlightEntity flight) =>
+      FirebaseService.takenSeats(flight.scheduleKey);
 
   @override
   Future<List<BookingEntity>> forUser(String userId) async {
@@ -108,6 +119,9 @@ Map<String, dynamic> _bookingToMap(
         .toList(),
 
     'seats': booking.seats,
+
+    // Seat locks (seatLocks/{flightKey}_{seat}) are written in the same batch.
+    'flightKey': booking.flight.scheduleKey,
 
     'fare': _fareToMap(
       booking.fare,

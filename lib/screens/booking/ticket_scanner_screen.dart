@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/app_localizations.dart';
+import '../../providers/language_provider.dart';
 import '../../services/firebase_service.dart';
 import '../../services/ticket_qr_service.dart';
 
@@ -14,6 +17,8 @@ class TicketScannerScreen extends StatefulWidget {
 class _TicketScannerScreenState extends State<TicketScannerScreen> {
   bool handled = false;
   bool checking = false;
+
+  String get lang => context.read<LanguageProvider>().languageCode;
 
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (handled || checking) return;
@@ -35,8 +40,8 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
 
       await _showResult(
         valid: false,
-        title: 'ตั๋วไม่ถูกต้อง',
-        message: localResult.message,
+        title: tr(lang, 'ticket_invalid'),
+        message: tr(lang, localResult.message),
       );
       return;
     }
@@ -48,8 +53,8 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
 
       await _showResult(
         valid: false,
-        title: 'ตรวจสอบออนไลน์ไม่ได้',
-        message: 'Firebase ยังไม่พร้อมใช้งาน',
+        title: tr(lang, 'scan_offline'),
+        message: tr(lang, 'scan_offline_body'),
       );
       return;
     }
@@ -68,9 +73,8 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
 
         await _showResult(
           valid: false,
-          title: 'ไม่พบตั๋วในระบบ',
-          message:
-              'Booking ID $bookingId ยังไม่ได้ยืนยันการชำระเงิน หรือไม่มีอยู่ในระบบ',
+          title: tr(lang, 'ticket_not_found'),
+          message: trArgs(lang, 'ticket_not_found_body', {'id': bookingId}),
         );
         return;
       }
@@ -82,8 +86,8 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
 
         await _showResult(
           valid: false,
-          title: 'ตั๋วถูกยกเลิก',
-          message: 'Booking ID $bookingId ถูกยกเลิกแล้ว',
+          title: tr(lang, 'ticket_cancelled'),
+          message: trArgs(lang, 'ticket_cancelled_body', {'id': bookingId}),
           ticket: ticket,
         );
         return;
@@ -93,8 +97,8 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
 
       await _showResult(
         valid: true,
-        title: 'ตั๋วถูกต้อง',
-        message: 'ชำระเงินแล้ว และตรวจสอบกับระบบสำเร็จ',
+        title: tr(lang, 'ticket_valid'),
+        message: tr(lang, 'ticket_valid_body'),
         ticket: ticket,
       );
     } catch (error) {
@@ -104,7 +108,7 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
 
       await _showResult(
         valid: false,
-        title: 'ตรวจสอบตั๋วไม่สำเร็จ',
+        title: tr(lang, 'scan_failed'),
         message: error.toString(),
       );
     }
@@ -150,27 +154,27 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
                   ticket['bookingId']?.toString() ?? '-',
                 ),
                 _line(
-                  'เที่ยวบิน',
+                  tr(lang, 'flight'),
                   ticket['flightNumber']?.toString() ?? '-',
                 ),
                 _line(
-                  'เส้นทาง',
+                  tr(lang, 'route'),
                   '${ticket['departureCode'] ?? '-'} → ${ticket['arrivalCode'] ?? '-'}',
                 ),
                 _line(
-                  'ผู้โดยสาร',
+                  tr(lang, 'passenger'),
                   ticket['passengerName']?.toString() ?? '-',
                 ),
                 _line(
-                  'ที่นั่ง',
+                  tr(lang, 'seat'),
                   seats,
                 ),
                 _line(
-                  'ชั้นโดยสาร',
+                  tr(lang, 'class'),
                   ticket['cabinClass']?.toString() ?? '-',
                 ),
                 _line(
-                  'สถานะ',
+                  tr(lang, 'status'),
                   ticket['status']?.toString() ?? '-',
                 ),
               ],
@@ -182,13 +186,13 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
             onPressed: () {
               Navigator.pop(dialogContext);
             },
-            child: const Text('สแกนอีกครั้ง'),
+            child: Text(tr(lang, 'scan_again')),
           ),
           FilledButton(
             onPressed: () {
               Navigator.pop(dialogContext);
             },
-            child: const Text('ตกลง'),
+            child: Text(tr(lang, 'ok')),
           ),
         ],
       ),
@@ -231,77 +235,69 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('สแกน E-Ticket'),
-        ),
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            MobileScanner(
-              onDetect: _onDetect,
+  Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>().languageCode;
+    return Scaffold(
+      appBar: AppBar(title: Text(tr(lang, 'scan_e_ticket'))),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          MobileScanner(onDetect: _onDetect),
+          IgnorePointer(
+            child: Center(
+              child: Container(
+                width: 280,
+                height: 280,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: checking ? Colors.amber : Colors.white,
+                    width: 3,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
             ),
-
-            IgnorePointer(
-              child: Center(
-                child: Container(
-                  width: 280,
-                  height: 280,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: checking
-                          ? Colors.amber
-                          : Colors.white,
-                      width: 3,
-                    ),
-                    borderRadius: BorderRadius.circular(24),
+          ),
+          if (checking)
+            Center(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(tr(lang, 'scan_checking')),
+                    ],
                   ),
                 ),
               ),
             ),
-
-            if (checking)
-              const Center(
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Text('กำลังตรวจสอบกับ Firestore...'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            const Positioned(
-              left: 24,
-              right: 24,
-              bottom: 36,
-              child: Text(
-                'เล็งกล้องไปที่ QR บนตั๋ว NEON FLIGHT',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 36,
+            child: Text(
+              tr(lang, 'scan_aim_hint'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 extension<T> on List<T> {

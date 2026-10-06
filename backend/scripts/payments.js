@@ -96,18 +96,24 @@ async function confirm(db, bookingId) {
 
 async function reject(db, bookingId) {
   const bookingRef = db.collection('bookings').doc(bookingId);
+  const locksQuery = db.collection('seatLocks').where('bookingId', '==', bookingId);
+  let released = 0;
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(bookingRef);
     if (!snap.exists) throw new Error(`Booking ${bookingId} not found`);
     if (snap.data().paymentStatus !== 'pending') {
       throw new Error(`Booking ${bookingId} is not pending; refund/cancel paid bookings manually`);
     }
+    const locks = await tx.get(locksQuery);
     tx.update(bookingRef, {
       status: 'cancelled',
       updatedAt: FieldValue.serverTimestamp(),
     });
+    // Free the seats for other passengers.
+    locks.forEach((lock) => tx.delete(lock.ref));
+    released = locks.size;
   });
-  console.log(`Cancelled unpaid booking ${bookingId}.`);
+  console.log(`Cancelled unpaid booking ${bookingId}; released ${released} seat(s).`);
 }
 
 async function main() {

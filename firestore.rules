@@ -72,11 +72,48 @@ service cloud.firestore {
           'paidAt',
           'paymentConfirmedBy',
           'ticketIssuedAt'
-        ]);
+        ])
+        && allSeatsLocked(request.resource.data);
 
       allow read:
         if signedIn()
         && resource.data.userId == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    // One lock per booked seat, written in the same batch as the booking.
+    // Locks are never updated, so the first booking to lock a seat wins.
+    // Only the server (backend/scripts/payments.js reject) deletes them.
+    function seatLock(flightKey, seat) {
+      return /databases/$(database)/documents/seatLocks/$(flightKey + '_' + seat);
+    }
+
+    function seatLockedAt(b, i) {
+      return b.seats.size() <= i || existsAfter(seatLock(b.flightKey, b.seats[i]));
+    }
+
+    // Rules have no loops; bookings are capped at 9 seats (9 passengers).
+    function allSeatsLocked(b) {
+      return b.flightKey is string
+        && b.seats is list
+        && b.seats.size() >= 1
+        && b.seats.size() <= 9
+        && seatLockedAt(b, 0) && seatLockedAt(b, 1) && seatLockedAt(b, 2)
+        && seatLockedAt(b, 3) && seatLockedAt(b, 4) && seatLockedAt(b, 5)
+        && seatLockedAt(b, 6) && seatLockedAt(b, 7) && seatLockedAt(b, 8);
+    }
+
+    match /seatLocks/{lockId} {
+      allow read: if true;
+
+      allow create:
+        if signedIn()
+        && request.resource.data.keys().hasOnly(['flightKey', 'seat', 'bookingId', 'createdAt'])
+        && lockId == request.resource.data.flightKey + '_' + request.resource.data.seat
+        && getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.userId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.flightKey == request.resource.data.flightKey
+        && request.resource.data.seat in getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.seats;
 
       allow update, delete: if false;
     }

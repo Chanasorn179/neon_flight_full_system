@@ -81,3 +81,7 @@ SETUP_5_6.md
 # Firebase service-account keys
 *service-account*.json
 *-firebase-adminsdk-*.json
+
+# Screenshot tool output
+test/screenshots/out/
+test/screenshots/failures/

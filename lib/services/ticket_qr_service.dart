@@ -55,7 +55,7 @@ class TicketQrService {
     } catch (_) {
       return const TicketVerification(
         valid: false,
-        message: 'อ่านข้อมูล QR ไม่สำเร็จ',
+        message: 'qr_unreadable',
       );
     }
   }
@@ -66,14 +66,14 @@ class TicketQrService {
     if (uri == null) {
       return const TicketVerification(
         valid: false,
-        message: 'URL ของตั๋วไม่ถูกต้อง',
+        message: 'qr_bad_url',
       );
     }
 
     if (uri.host != 'neon-flight.web.app') {
       return const TicketVerification(
         valid: false,
-        message: 'QR นี้ไม่ใช่เว็บไซต์ตรวจตั๋ว NEON FLIGHT',
+        message: 'qr_wrong_site',
       );
     }
 
@@ -82,7 +82,7 @@ class TicketQrService {
     if (segments.length != 2 || segments.first != 't') {
       return const TicketVerification(
         valid: false,
-        message: 'รูปแบบลิงก์ตั๋วไม่ถูกต้อง',
+        message: 'qr_bad_format',
       );
     }
 
@@ -98,7 +98,7 @@ class TicketQrService {
     if (parts.length != 3 || parts[0] != _legacyPrefix) {
       return const TicketVerification(
         valid: false,
-        message: 'QR นี้ไม่ใช่ตั๋ว NEON FLIGHT',
+        message: 'qr_not_ticket',
       );
     }
 
@@ -112,7 +112,7 @@ class TicketQrService {
     if (bookingId.isEmpty || token.isEmpty) {
       return const TicketVerification(
         valid: false,
-        message: 'ข้อมูลตั๋วไม่ครบ',
+        message: 'qr_incomplete',
       );
     }
 
@@ -121,13 +121,13 @@ class TicketQrService {
     if (token.toUpperCase() != expected) {
       return const TicketVerification(
         valid: false,
-        message: 'รหัสตรวจสอบตั๋วไม่ถูกต้อง',
+        message: 'qr_bad_token',
       );
     }
 
     return TicketVerification(
       valid: true,
-      message: 'รูปแบบ QR ถูกต้อง',
+      message: 'qr_ok',
       data: {
         'bookingId': bookingId,
         'token': token.toUpperCase(),
@@ -144,6 +144,8 @@ class TicketVerification {
   });
 
   final bool valid;
+
+  /// Translation key for app_localizations.dart.
   final String message;
   final Map<String, dynamic>? data;
 }

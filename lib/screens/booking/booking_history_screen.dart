@@ -324,16 +324,26 @@ class _FlightBookingCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                _StatusChip(
-                  label: tr(
-                    languageCode,
-                    _statusKey(_effectiveFlightStatus(booking)),
+                if (!booking.isPaid &&
+                    booking.status != BookingStatus.cancelled)
+                  _StatusChip(
+                    label: tr(languageCode, 'payment_pending_short'),
+                    color: theme.brightness == Brightness.dark
+                        ? const Color(0xFFFFC266)
+                        : const Color(0xFF9A5B00),
+                    icon: Icons.hourglass_top_rounded,
+                  )
+                else
+                  _StatusChip(
+                    label: tr(
+                      languageCode,
+                      _statusKey(_effectiveFlightStatus(booking)),
+                    ),
+                    color: _statusColor(
+                      context,
+                      _effectiveFlightStatus(booking),
+                    ),
                   ),
-                  color: _statusColor(
-                    context,
-                    _effectiveFlightStatus(booking),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -665,10 +675,11 @@ class _ProgressStep extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label, required this.color});
+  const _StatusChip({required this.label, required this.color, this.icon});
 
   final String label;
   final Color color;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -678,9 +689,18 @@ class _StatusChip extends StatelessWidget {
         color: color.withValues(alpha: .12),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w800),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w800),
+          ),
+        ],
       ),
     );
   }

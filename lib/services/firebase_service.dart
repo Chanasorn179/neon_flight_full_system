@@ -98,15 +98,49 @@ class FirebaseService {
       bookingData['createdAt'],
     );
 
-    // Plain create: firestore.rules only accepts new bookings with
-    // paymentStatus 'pending'. The ticket is issued after payment is confirmed.
-    await firestore.collection('bookings').doc(id).set(
-      {
-        ...bookingData,
-        'id': id,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-    );
+    final flightKey = bookingData['flightKey'].toString();
+    final seats = List<String>.from(bookingData['seats'] as List);
+
+    // Fail fast with a clear error when a seat is already gone.
+    final clash = (await takenSeats(flightKey)).intersection(seats.toSet());
+    if (clash.isNotEmpty) throw SeatTakenException(clash);
+
+    // One batch: the booking plus one lock per seat. firestore.rules requires
+    // every seat to be locked and never lets a lock be overwritten, so two
+    // people cannot book the same seat even if they press pay together.
+    final batch = firestore.batch();
+    batch.set(firestore.collection('bookings').doc(id), {
+      ...bookingData,
+      'id': id,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    for (final seat in seats) {
+      batch.set(firestore.collection('seatLocks').doc('${flightKey}_$seat'), {
+        'flightKey': flightKey,
+        'seat': seat,
+        'bookingId': id,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    try {
+      await batch.commit();
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') {
+        final lost = (await takenSeats(flightKey)).intersection(seats.toSet());
+        if (lost.isNotEmpty) throw SeatTakenException(lost);
+      }
+      rethrow;
+    }
+  }
+
+  static Future<Set<String>> takenSeats(String flightKey) async {
+    if (!enabled) return {};
+    final snapshot = await firestore
+        .collection('seatLocks')
+        .where('flightKey', isEqualTo: flightKey)
+        .get();
+    return {for (final doc in snapshot.docs) doc.data()['seat'].toString()};
   }
 
   static Future<Map<String, dynamic>?> bookingById(

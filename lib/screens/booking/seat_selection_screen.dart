@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
 import '../../models/entities.dart';
+import '../../providers/booking_provider.dart';
 import '../../providers/language_provider.dart';
 import 'payment_screen.dart';
 
@@ -28,7 +29,35 @@ class SeatSelectionScreen extends StatefulWidget {
 class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   final Set<String> selected = <String>{};
 
-  Set<String> get unavailable => switch (widget.cabinClass) {
+  /// Seats held by other bookings on this departure.
+  Set<String> taken = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTakenSeats();
+  }
+
+  Future<void> _loadTakenSeats() async {
+    try {
+      final seats = await context
+          .read<BookingProvider>()
+          .repository
+          .takenSeats(widget.flight);
+      if (!mounted) return;
+      setState(() {
+        taken = seats;
+        selected.removeAll(seats);
+      });
+    } catch (_) {
+      // Keep the demo layout; the booking itself still enforces seat locks.
+    }
+  }
+
+  Set<String> get unavailable => {...taken, ..._demoOccupied};
+
+  /// Pre-booked seats so the demo cabin never looks empty.
+  Set<String> get _demoOccupied => switch (widget.cabinClass) {
         CabinClass.economy => {
             '1B',
             '2D',
@@ -78,12 +107,12 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     });
   }
 
-  void _continueToPayment() {
+  Future<void> _continueToPayment() async {
     if (!canContinue) return;
 
     HapticFeedback.lightImpact();
 
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PaymentScreen(
           flight: widget.flight,
@@ -93,6 +122,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         ),
       ),
     );
+    // Back from payment (e.g. a seat was taken meanwhile): refresh the map.
+    await _loadTakenSeats();
   }
 
   @override

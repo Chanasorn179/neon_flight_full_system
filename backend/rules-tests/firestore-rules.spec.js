@@ -8,7 +8,7 @@ const {
   assertSucceeds,
   assertFails,
 } = require('@firebase/rules-unit-testing');
-const { doc, getDoc, setDoc, updateDoc, deleteDoc } = require('firebase/firestore');
+const { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch } = require('firebase/firestore');
 
 let env;
 
@@ -17,9 +17,25 @@ const booking = (overrides = {}) => ({
   userId: 'alice',
   status: 'upcoming',
   paymentStatus: 'pending',
+  flightKey: 'FD385_20261120',
+  seats: ['12C'],
   fare: { total: 3200 },
   ...overrides,
 });
+
+// The app's write: booking + one seat lock per seat in one batch.
+function bookWithLocks(db, data, { lockSeats = data.seats } = {}) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, `bookings/${data.id}`), data);
+  for (const seat of lockSeats) {
+    batch.set(doc(db, `seatLocks/${data.flightKey}_${seat}`), {
+      flightKey: data.flightKey,
+      seat,
+      bookingId: data.id,
+    });
+  }
+  return batch.commit();
+}
 
 test.before(async () => {
   env = await initializeTestEnvironment({
@@ -40,17 +56,46 @@ async function seed(path, data) {
   await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), path), data));
 }
 
-test('user can create their own pending booking', async () => {
-  await assertSucceeds(setDoc(doc(alice(), 'bookings/NF1'), booking()));
+test('user can create their own pending booking with seat locks', async () => {
+  await assertSucceeds(bookWithLocks(alice(), booking()));
+});
+
+test('booking without seat locks is rejected', async () => {
+  await assertFails(setDoc(doc(alice(), 'bookings/NF1'), booking()));
+  await assertFails(bookWithLocks(alice(), booking({ seats: ['12C', '12D'] }), { lockSeats: ['12C'] }));
+});
+
+test('a seat cannot be booked twice', async () => {
+  await assertSucceeds(bookWithLocks(alice(), booking()));
+  const bob = env.authenticatedContext('bob').firestore();
+  await assertFails(bookWithLocks(bob, booking({ id: 'NF2', userId: 'bob' })));
+  // A different seat on the same flight is fine.
+  await assertSucceeds(bookWithLocks(bob, booking({ id: 'NF3', userId: 'bob', seats: ['14A'] })));
+});
+
+test('nine seats can be booked in one go', async () => {
+  const seats = ['1A', '1B', '1C', '1D', '1E', '1F', '2A', '2B', '2C'];
+  await assertSucceeds(bookWithLocks(alice(), booking({ seats })));
+  await assertFails(bookWithLocks(alice(), booking({ id: 'NF2', seats: [...seats.map((s) => `9${s}`), '3A'] })));
+});
+
+test("locks cannot point at someone else's booking or be removed", async () => {
+  await seed('bookings/NF9', booking({ id: 'NF9', userId: 'bob' }));
+  await assertFails(setDoc(doc(alice(), 'seatLocks/FD385_20261120_12C'), {
+    flightKey: 'FD385_20261120', seat: '12C', bookingId: 'NF9',
+  }));
+  await seed('seatLocks/FD385_20261120_1A', { flightKey: 'FD385_20261120', seat: '1A', bookingId: 'NF9' });
+  await assertFails(deleteDoc(doc(alice(), 'seatLocks/FD385_20261120_1A')));
+  await assertSucceeds(getDoc(doc(anon(), 'seatLocks/FD385_20261120_1A')));
 });
 
 test('user cannot create a booking that is already paid', async () => {
-  await assertFails(setDoc(doc(alice(), 'bookings/NF1'), booking({ paymentStatus: 'paid' })));
-  await assertFails(setDoc(doc(alice(), 'bookings/NF1'), booking({ paidAt: new Date() })));
+  await assertFails(bookWithLocks(alice(), booking({ paymentStatus: 'paid' })));
+  await assertFails(bookWithLocks(alice(), booking({ paidAt: new Date() })));
 });
 
 test('user cannot create a booking for someone else or under another ID', async () => {
-  await assertFails(setDoc(doc(alice(), 'bookings/NF1'), booking({ userId: 'bob' })));
+  await assertFails(bookWithLocks(alice(), booking({ userId: 'bob' })));
   await assertFails(setDoc(doc(alice(), 'bookings/NF2'), booking()));
 });
 

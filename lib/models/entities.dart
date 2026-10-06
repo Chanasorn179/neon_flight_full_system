@@ -129,6 +129,24 @@ class FlightEntity {
 
   Duration get duration => arrivalTime.difference(departureTime);
   double price(CabinClass cabinClass) => basePrice * cabinClass.multiplier;
+
+  /// Identifies one departure (flight number + local date). Seat locks in
+  /// Firestore are keyed by it, so it must be stable across searches.
+  String get scheduleKey {
+    final d = departureTime;
+    final ymd = '${d.year}${d.month.toString().padLeft(2, '0')}'
+        '${d.day.toString().padLeft(2, '0')}';
+    return '${flightNumber}_$ymd';
+  }
+}
+
+/// Thrown when a seat was taken by someone else before the booking was saved.
+class SeatTakenException implements Exception {
+  const SeatTakenException(this.seats);
+  final Set<String> seats;
+
+  @override
+  String toString() => 'Seats already taken: ${seats.join(', ')}';
 }
 
 class PassengerEntity {
