@@ -126,6 +126,42 @@ test('user cannot mark a pending booking paid, edit it or delete it', async () =
   await assertFails(deleteDoc(doc(alice(), 'bookings/NF1')));
 });
 
+// The app's cancel: mark the booking cancelled and drop its locks together.
+function cancelWithLocks(db, id, lockIds) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, `bookings/${id}`), { status: 'cancelled' });
+  for (const lockId of lockIds) batch.delete(doc(db, `seatLocks/${lockId}`));
+  return batch.commit();
+}
+
+test('owner can cancel an unpaid booking and release its seats', async () => {
+  await assertSucceeds(bookWithLocks(alice(), booking()));
+  await assertSucceeds(cancelWithLocks(alice(), 'NF1', ['FD385_20261120_12C']));
+  // The seat is free again for someone else.
+  const bob = env.authenticatedContext('bob').firestore();
+  await assertSucceeds(bookWithLocks(bob, booking({ id: 'NF2', userId: 'bob' })));
+});
+
+test('cancelling cannot touch paid, already-cancelled or other people’s bookings', async () => {
+  await seed('bookings/NF1', booking({ paymentStatus: 'paid' }));
+  await assertFails(cancelWithLocks(alice(), 'NF1', []));
+
+  await seed('bookings/NF2', booking({ id: 'NF2', userId: 'bob' }));
+  await assertFails(cancelWithLocks(alice(), 'NF2', []));
+
+  await seed('bookings/NF3', booking({ id: 'NF3', status: 'cancelled' }));
+  await assertFails(cancelWithLocks(alice(), 'NF3', []));
+
+  // A cancel may not change anything else.
+  await seed('bookings/NF4', booking({ id: 'NF4' }));
+  await assertFails(updateDoc(doc(alice(), 'bookings/NF4'), { status: 'cancelled', seats: ['1A'] }));
+});
+
+test('a seat lock cannot be deleted while its booking is active', async () => {
+  await assertSucceeds(bookWithLocks(alice(), booking()));
+  await assertFails(deleteDoc(doc(alice(), 'seatLocks/FD385_20261120_12C')));
+});
+
 test('user reads only their own bookings', async () => {
   await seed('bookings/NF1', booking());
   await seed('bookings/NF2', booking({ id: 'NF2', userId: 'bob' }));

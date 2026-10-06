@@ -63,6 +63,28 @@ class BookingProvider extends ChangeNotifier {
     return created;
   }
 
+  /// The booking plus its round-trip partner, if any.
+  List<BookingEntity> tripOf(BookingEntity booking) => booking.tripId == null
+      ? [booking]
+      : [
+          for (final b in bookings)
+            if (b.tripId == booking.tripId) b,
+          if (!bookings.any((b) => b.id == booking.id)) booking,
+        ];
+
+  /// Cancels an unpaid booking (both legs of a round trip) and frees seats.
+  Future<void> cancel(BookingEntity booking) async {
+    final trip = tripOf(booking).where((b) => b.canCancel).toList();
+    if (trip.isEmpty) return;
+    await repository.cancel(trip);
+    final ids = {for (final b in trip) b.id};
+    bookings = [
+      for (final b in bookings)
+        ids.contains(b.id) ? b.withStatus(BookingStatus.cancelled) : b,
+    ];
+    notifyListeners();
+  }
+
   void addTransferBooking(TransferBookingEntity booking) {
     final existingIndex = transferBookings.indexWhere(
       (item) =>

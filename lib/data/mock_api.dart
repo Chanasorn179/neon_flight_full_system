@@ -170,6 +170,15 @@ class MockApi {
     return bookings;
   }
 
+  Future<void> cancelBookings(Set<String> ids) async {
+    await _wait();
+    for (var i = 0; i < _bookings.length; i++) {
+      if (ids.contains(_bookings[i].id)) {
+        _bookings[i] = _bookings[i].withStatus(BookingStatus.cancelled);
+      }
+    }
+  }
+
   Set<String> takenSeats(String scheduleKey) => {
         for (final b in _bookings)
           if (b.flight.scheduleKey == scheduleKey &&

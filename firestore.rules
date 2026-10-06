@@ -79,7 +79,17 @@ service cloud.firestore {
         if signedIn()
         && resource.data.userId == request.auth.uid;
 
-      allow update, delete: if false;
+      // The only client change: the owner cancels an unpaid booking.
+      allow update:
+        if signedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.paymentStatus == 'pending'
+        && resource.data.status == 'upcoming'
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'updatedAt']);
+
+      allow delete: if false;
     }
 
     // One lock per booked seat, written in the same batch as the booking.
@@ -115,7 +125,13 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.flightKey == request.resource.data.flightKey
         && request.resource.data.seat in getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.seats;
 
-      allow update, delete: if false;
+      // Released together with cancelling the owner's booking (same batch).
+      allow delete:
+        if signedIn()
+        && getAfter(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.userId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.status == 'cancelled';
+
+      allow update: if false;
     }
 
     // Public E-ticket verification by exact, tokenized document ID.

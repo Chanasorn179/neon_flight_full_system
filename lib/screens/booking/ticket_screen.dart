@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
 import '../../data/thai_airlines.dart';
 import '../../models/entities.dart';
+import '../../providers/booking_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../services/firebase_service.dart';
 import '../../services/ticket_qr_service.dart';
@@ -55,6 +56,9 @@ class TicketScreen extends StatelessWidget {
                         : FirebaseService.watchPaymentStatus(booking.id),
                     initialData: booking.paymentStatus,
                     builder: (context, snapshot) {
+                      if (booking.status == BookingStatus.cancelled) {
+                        return const _CancelledNotice();
+                      }
                       if (snapshot.data != PaymentStatus.paid) {
                         return _PendingPayment(booking: booking);
                       }
@@ -473,6 +477,94 @@ class _PendingPayment extends StatelessWidget {
             ].join('\n'),
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium,
+          ),
+          if (booking.canCancel) ...[
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+                side: BorderSide(color: theme.colorScheme.error.withValues(alpha: .6)),
+                minimumSize: const Size(0, 48),
+              ),
+              onPressed: () => _confirmCancel(context, lang),
+              icon: const Icon(Icons.cancel_outlined),
+              label: Text(tr(lang, 'cancel_booking')),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmCancel(BuildContext context, String lang) async {
+    final provider = context.read<BookingProvider>();
+    final isTrip = provider.tripOf(booking).length > 1;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final colors = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          icon: Icon(Icons.warning_amber_rounded, color: colors.error),
+          title: Text(tr(lang, 'cancel_booking')),
+          content: Text([
+            trArgs(lang, 'cancel_booking_confirm', {'id': booking.id}),
+            if (isTrip) tr(lang, 'cancel_trip_note'),
+          ].join('\n\n')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(tr(lang, 'keep_booking')),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.error,
+                foregroundColor: colors.onError,
+              ),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(tr(lang, 'cancel_booking')),
+            ),
+          ],
+        );
+      },
+    );
+    if (ok != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await provider.cancel(booking);
+      messenger.showSnackBar(SnackBar(content: Text(tr(lang, 'booking_cancelled'))));
+      if (context.mounted) Navigator.of(context).pop();
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(tr(lang, 'cancel_failed'))));
+    }
+  }
+}
+
+class _CancelledNotice extends StatelessWidget {
+  const _CancelledNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>().languageCode;
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer.withValues(alpha: .55),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.block_rounded, size: 36, color: theme.colorScheme.error),
+          const SizedBox(height: 8),
+          Text(
+            tr(lang, 'booking_cancelled'),
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            tr(lang, 'booking_cancelled_body'),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

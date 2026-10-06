@@ -12,6 +12,9 @@ abstract class BookingRepository {
 
   /// Seats already held by other bookings on the same departure.
   Future<Set<String>> takenSeats(FlightEntity flight);
+
+  /// Cancels unpaid bookings and releases their seats.
+  Future<void> cancel(List<BookingEntity> bookings);
 }
 
 /// ใช้สำหรับโหมด Mock / Offline fallback
@@ -36,6 +39,10 @@ class MockBookingRepository implements BookingRepository {
   @override
   Future<Set<String>> takenSeats(FlightEntity flight) async =>
       api.takenSeats(flight.scheduleKey);
+
+  @override
+  Future<void> cancel(List<BookingEntity> bookings) =>
+      api.cancelBookings({for (final b in bookings) b.id});
 }
 
 /// ใช้ Firebase Firestore จริง
@@ -56,6 +63,10 @@ class FirebaseBookingRepository implements BookingRepository {
   @override
   Future<Set<String>> takenSeats(FlightEntity flight) =>
       FirebaseService.takenSeats(flight.scheduleKey);
+
+  @override
+  Future<void> cancel(List<BookingEntity> bookings) =>
+      FirebaseService.cancelBookings([for (final b in bookings) b.id]);
 
   @override
   Future<List<BookingEntity>> forUser(String userId) async {

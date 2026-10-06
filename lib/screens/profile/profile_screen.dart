@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
+import '../../widgets/app_widgets.dart';
+import '../../services/profile_store.dart';
+import '../../services/firebase_service.dart';
 import '../../models/entities.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
@@ -636,22 +639,70 @@ class _PersonalInfoScreen extends StatefulWidget {
 }
 
 class _PersonalInfoScreenState extends State<_PersonalInfoScreen> {
+  final _form = GlobalKey<FormState>();
   late final TextEditingController name;
-  late final TextEditingController email;
   final phone = TextEditingController();
   final address = TextEditingController();
+  bool loading = true;
+  bool saving = false;
+
+  String get lang => widget.lang;
 
   @override
   void initState() {
     super.initState();
     name = TextEditingController(text: widget.initialName);
-    email = TextEditingController(text: widget.initialEmail);
+    _load();
+  }
+
+  Future<void> _load() async {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user != null) {
+      try {
+        final data = await ProfileStore.load(user.id);
+        name.text = (data['name'] as String?)?.trim().isNotEmpty == true
+            ? data['name'] as String
+            : name.text;
+        phone.text = data['phone'] as String? ?? '';
+        address.text = data['address'] as String? ?? '';
+      } catch (_) {
+        // Show the form anyway; saving reports its own errors.
+      }
+    }
+    if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> _save() async {
+    if (!(_form.currentState?.validate() ?? false)) return;
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+    setState(() => saving = true);
+    try {
+      await ProfileStore.save(user.id, {
+        'name': name.text.trim(),
+        'phone': phone.text.trim(),
+        'address': address.text.trim(),
+      });
+      auth.updateName(name.text.trim());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr(lang, 'saved'))),
+      );
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr(lang, 'save_failed'))),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
   }
 
   @override
   void dispose() {
     name.dispose();
-    email.dispose();
     phone.dispose();
     address.dispose();
     super.dispose();
@@ -660,56 +711,79 @@ class _PersonalInfoScreenState extends State<_PersonalInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(widget.lang, 'personal_info'))),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _FormCard(
-            children: [
-              TextField(
-                controller: name,
-                decoration: InputDecoration(
-                  labelText: tr(widget.lang, 'full_name'),
-                  prefixIcon: const Icon(Icons.person_outline),
-                ),
+      appBar: AppBar(title: Text(tr(lang, 'personal_info'))),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+              key: _form,
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  _FormCard(
+                    children: [
+                      TextFormField(
+                        controller: name,
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: tr(lang, 'full_name'),
+                          prefixIcon: const Icon(Icons.person_outline),
+                        ),
+                        validator: (v) =>
+                            (v ?? '').trim().isEmpty ? tr(lang, 'required') : null,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        initialValue: widget.initialEmail,
+                        enabled: false,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          helperText: tr(lang, 'email_change_hint'),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: phone,
+                        keyboardType: TextInputType.phone,
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: tr(lang, 'phone'),
+                          prefixIcon: const Icon(Icons.phone_outlined),
+                          hintText: '0812345678',
+                        ),
+                        validator: (v) {
+                          final digits = (v ?? '').replaceAll(RegExp(r'[\s-]'), '');
+                          if (digits.isEmpty) return null;
+                          return RegExp(r'^\+?\d{9,15}$').hasMatch(digits)
+                              ? null
+                              : tr(lang, 'invalid_phone');
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: address,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          labelText: tr(lang, 'address'),
+                          prefixIcon: const Icon(Icons.location_on_outlined),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                  FilledButton.icon(
+                    onPressed: saving ? null : _save,
+                    icon: saving
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.save_outlined),
+                    label: Text(tr(lang, 'save')),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: email,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.email_outlined),
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: phone,
-                decoration: InputDecoration(
-                  labelText: tr(widget.lang, 'phone'),
-                  prefixIcon: const Icon(Icons.phone_outlined),
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: address,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: tr(widget.lang, 'address'),
-                  prefixIcon: const Icon(Icons.location_on_outlined),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          FilledButton.icon(
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(tr(widget.lang, 'saved'))),
             ),
-            icon: const Icon(Icons.save_outlined),
-            label: Text(tr(widget.lang, 'save')),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -723,105 +797,285 @@ class _SavedPassengersScreen extends StatefulWidget {
 }
 
 class _SavedPassengersScreenState extends State<_SavedPassengersScreen> {
-  final passengers = <String>[];
+  List<PassengerEntity> passengers = [];
+  bool loading = true;
+
+  String get lang => widget.lang;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(tr(widget.lang, 'saved_passengers'))),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _add,
-        icon: const Icon(Icons.person_add_alt_1),
-        label: Text(tr(widget.lang, 'add')),
-      ),
-      body: passengers.isEmpty
-          ? Center(child: Text(tr(widget.lang, 'no_passengers')))
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: passengers.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, index) => Card(
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
-                  title: Text(passengers[index]),
-                  trailing: IconButton(
-                    onPressed: () => setState(() => passengers.removeAt(index)),
-                    icon: const Icon(Icons.delete_outline),
-                  ),
-                ),
-              ),
-            ),
-    );
+  void initState() {
+    super.initState();
+    _load();
   }
 
-  Future<void> _add() async {
-    final controller = TextEditingController();
-    final value = await showDialog<String>(
+  Future<void> _load() async {
+    final user = context.read<AuthProvider>().currentUser;
+    try {
+      if (user != null) {
+        passengers = await FirebaseService.savedPassengers(user.id);
+      }
+    } catch (_) {
+      passengers = [];
+    }
+    if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> _delete(PassengerEntity p) async {
+    final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(tr(widget.lang, 'add_passenger')),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(labelText: tr(widget.lang, 'full_name')),
-        ),
+        title: Text(tr(lang, 'delete_passenger')),
+        content: Text(p.fullName),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(tr(widget.lang, 'cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(tr(lang, 'cancel')),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: Text(tr(widget.lang, 'save')),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(tr(lang, 'delete')),
           ),
         ],
       ),
     );
-    controller.dispose();
-    if (value != null && value.isNotEmpty) {
-      setState(() => passengers.add(value));
+    if (ok != true || !mounted) return;
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) return;
+    try {
+      await FirebaseService.deleteSavedPassenger(user.id, p.passportNumber);
+      setState(() => passengers.remove(p));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr(lang, 'save_failed'))),
+      );
     }
+  }
+
+  String _masked(String passport) => passport.length <= 3
+      ? passport
+      : '${'•' * (passport.length - 3)}${passport.substring(passport.length - 3)}';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(tr(lang, 'saved_passengers'))),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer.withValues(alpha: .45),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: theme.colorScheme.primary),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(tr(lang, 'saved_passengers_hint'))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (passengers.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 48),
+                    child: Center(child: Text(tr(lang, 'no_passengers'))),
+                  ),
+                for (final p in passengers) ...[
+                  Card(
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        child: Text(
+                          p.firstName.isEmpty ? '?' : p.firstName.substring(0, 1).toUpperCase(),
+                        ),
+                      ),
+                      title: Text(p.fullName),
+                      subtitle: Text('${_masked(p.passportNumber)} · ${p.nationality}'),
+                      trailing: IconButton(
+                        tooltip: tr(lang, 'delete'),
+                        onPressed: () => _delete(p),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ],
+            ),
+    );
   }
 }
 
-class _PassportScreen extends StatelessWidget {
+class _PassportScreen extends StatefulWidget {
   const _PassportScreen({required this.lang});
   final String lang;
 
   @override
+  State<_PassportScreen> createState() => _PassportScreenState();
+}
+
+class _PassportScreenState extends State<_PassportScreen> {
+  final _form = GlobalKey<FormState>();
+  final number = TextEditingController();
+  final nationality = TextEditingController();
+  DateTime? expiry;
+  bool loading = true;
+  bool saving = false;
+
+  String get lang => widget.lang;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user != null) {
+      try {
+        final data = await ProfileStore.load(user.id);
+        final passport = data['passport'];
+        if (passport is Map) {
+          number.text = passport['number']?.toString() ?? '';
+          nationality.text = passport['nationality']?.toString() ?? '';
+          expiry = DateTime.tryParse(passport['expiry']?.toString() ?? '');
+        }
+      } catch (_) {}
+    }
+    if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> _pickExpiry() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: expiry ?? now.add(const Duration(days: 365 * 5)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 15)),
+    );
+    if (picked != null) setState(() => expiry = picked);
+  }
+
+  Future<void> _save() async {
+    if (!(_form.currentState?.validate() ?? false)) return;
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) return;
+    setState(() => saving = true);
+    try {
+      await ProfileStore.save(user.id, {
+        'passport': {
+          'number': number.text.trim().toUpperCase(),
+          'nationality': nationality.text.trim(),
+          if (expiry != null) 'expiry': dateKey(expiry!),
+        },
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr(lang, 'saved'))),
+      );
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr(lang, 'save_failed'))),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    number.dispose();
+    nationality.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(tr(lang, 'passport'))),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _FormCard(
-            children: [
-              TextField(
-                decoration: InputDecoration(
-                  labelText: tr(lang, 'passport_number'),
-                  prefixIcon: const Icon(Icons.menu_book_outlined),
-                ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+              key: _form,
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  _FormCard(
+                    children: [
+                      TextFormField(
+                        controller: number,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: InputDecoration(
+                          labelText: tr(lang, 'passport_number'),
+                          prefixIcon: const Icon(Icons.menu_book_outlined),
+                          hintText: 'AA1234567',
+                        ),
+                        validator: (v) {
+                          final value = (v ?? '').trim();
+                          if (value.isEmpty) return tr(lang, 'required');
+                          return RegExp(r'^[A-Za-z0-9]{6,9}$').hasMatch(value)
+                              ? null
+                              : tr(lang, 'invalid_passport');
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: nationality,
+                        decoration: InputDecoration(
+                          labelText: tr(lang, 'nationality'),
+                          prefixIcon: const Icon(Icons.public),
+                        ),
+                        validator: (v) =>
+                            (v ?? '').trim().isEmpty ? tr(lang, 'required') : null,
+                      ),
+                      const SizedBox(height: 14),
+                      FormField<DateTime>(
+                        validator: (_) => expiry == null ? tr(lang, 'required') : null,
+                        builder: (field) => InkWell(
+                          onTap: _pickExpiry,
+                          borderRadius: BorderRadius.circular(18),
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              labelText: tr(lang, 'passport_expiry'),
+                              prefixIcon: const Icon(Icons.event_outlined),
+                              errorText: field.errorText,
+                            ),
+                            child: Text(
+                              expiry == null ? '-' : dateOf(expiry!),
+                              style: theme.textTheme.bodyLarge,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                  FilledButton.icon(
+                    onPressed: saving ? null : _save,
+                    icon: saving
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.save_outlined),
+                    label: Text(tr(lang, 'save')),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              TextField(
-                decoration: InputDecoration(
-                  labelText: tr(lang, 'nationality'),
-                  prefixIcon: const Icon(Icons.public),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          FilledButton.icon(
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(tr(lang, 'saved'))),
             ),
-            icon: const Icon(Icons.save_outlined),
-            label: Text(tr(lang, 'save')),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1023,3 +1277,7 @@ class _FormCard extends StatelessWidget {
     );
   }
 }
+
+/// yyyy-MM-dd, for storing dates without a time zone.
+String dateKey(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

@@ -219,7 +219,16 @@ class BookingEntity {
 
   bool get isPaid => paymentStatus == PaymentStatus.paid;
 
-  BookingEntity withPaymentStatus(PaymentStatus value) => BookingEntity(
+  BookingEntity withPaymentStatus(PaymentStatus value) =>
+      _copy(paymentStatus: value);
+
+  BookingEntity withStatus(BookingStatus value) => _copy(status: value);
+
+  /// Unpaid, not yet cancelled: the owner may still cancel it.
+  bool get canCancel => !isPaid && status == BookingStatus.upcoming;
+
+  BookingEntity _copy({BookingStatus? status, PaymentStatus? paymentStatus}) =>
+      BookingEntity(
         id: id,
         userId: userId,
         flight: flight,
@@ -228,9 +237,9 @@ class BookingEntity {
         seats: seats,
         fare: fare,
         paymentMethod: paymentMethod,
-        status: status,
+        status: status ?? this.status,
         createdAt: createdAt,
-        paymentStatus: value,
+        paymentStatus: paymentStatus ?? this.paymentStatus,
         tripId: tripId,
       );
 }

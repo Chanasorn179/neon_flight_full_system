@@ -108,6 +108,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reflects a saved profile name in the signed-in user.
+  void updateName(String name) {
+    final user = currentUser;
+    if (user == null || name.trim().isEmpty) return;
+    currentUser = UserEntity(id: user.id, name: name.trim(), email: user.email);
+    notifyListeners();
+  }
+
   void logout() {
     currentUser = null;
     error = null;

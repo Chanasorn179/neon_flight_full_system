@@ -80,6 +80,15 @@ class FirebaseService {
     );
   }
 
+  /// Merges profile fields (name, phone, address, passport) into users/{uid}.
+  static Future<void> saveProfile(String id, Map<String, dynamic> data) async {
+    if (!enabled) return;
+    await firestore.collection('users').doc(id).set(
+      {...data, 'updatedAt': FieldValue.serverTimestamp()},
+      SetOptions(merge: true),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Bookings
   // ---------------------------------------------------------------------------
@@ -139,6 +148,27 @@ class FirebaseService {
       }
       rethrow;
     }
+  }
+
+  /// Owner cancels unpaid bookings; their seat locks are deleted in the same
+  /// batch (rules only allow that delete once the booking is cancelled).
+  static Future<void> cancelBookings(List<String> ids) async {
+    if (!enabled || ids.isEmpty) return;
+    final locks = await firestore
+        .collection('seatLocks')
+        .where('bookingId', whereIn: ids)
+        .get();
+    final batch = firestore.batch();
+    for (final id in ids) {
+      batch.update(firestore.collection('bookings').doc(id), {
+        'status': BookingStatus.cancelled.name,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    for (final lock in locks.docs) {
+      batch.delete(lock.reference);
+    }
+    await batch.commit();
   }
 
   static Future<Set<String>> takenSeats(String flightKey) async {
