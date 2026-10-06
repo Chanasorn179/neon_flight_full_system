@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
+import '../../data/thai_airlines.dart';
 import '../../models/entities.dart';
 import '../../providers/language_provider.dart';
 import '../../services/firebase_service.dart';
@@ -42,130 +44,57 @@ class TicketScreen extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 520),
             child: Column(
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(22),
-                    child: Column(
-                      children: [
-                        AirlineLogo(
-                          airlineName: booking.flight.airline,
-                          flightNumber: booking.flight.flightNumber,
-                          size: 56,
-                        ),
-                        const Text(
-                          'NEON FLIGHT',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 20,
+                _BoardingPass(
+                  booking: booking,
+                  lang: lang,
+                  // The QR only appears once the server has confirmed
+                  // payment and issued the public ticket record.
+                  bottom: StreamBuilder<PaymentStatus>(
+                    stream: booking.isPaid
+                        ? null
+                        : FirebaseService.watchPaymentStatus(booking.id),
+                    initialData: booking.paymentStatus,
+                    builder: (context, snapshot) {
+                      if (snapshot.data != PaymentStatus.paid) {
+                        return _PendingPayment(booking: booking);
+                      }
+                      return Column(
+                        children: [
+                          // Big QR with a generous quiet zone: easy to scan
+                          // with another phone's camera or a generic QR app.
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.all(14),
+                            child: QrImageView(
+                              data: qrData,
+                              version: QrVersions.auto,
+                              size: 220,
+                              backgroundColor: Colors.white,
+                              padding: const EdgeInsets.all(10),
+                              gapless: true,
+                              errorCorrectionLevel: QrErrorCorrectLevel.M,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              booking.flight.departure.code,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineMedium
-                                  ?.copyWith(fontWeight: FontWeight.w900),
+                          const SizedBox(height: 10),
+                          Text(
+                            booking.id,
+                            style: const TextStyle(
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.w700,
                             ),
-                            const Icon(Icons.arrow_forward),
-                            Text(
-                              booking.flight.arrival.code,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineMedium
-                                  ?.copyWith(fontWeight: FontWeight.w900),
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 28),
-                        _row(context, 'Booking ID', booking.id),
-                        _row(
-                          context,
-                          tr(lang, 'passenger'),
-                          booking.passengers.first.fullName,
-                        ),
-                        _row(
-                          context,
-                          tr(lang, 'flight'),
-                          booking.flight.flightNumber,
-                        ),
-                        _row(
-                          context,
-                          tr(lang, 'date'),
-                          dateOf(booking.flight.departureTime),
-                        ),
-                        _row(
-                          context,
-                          tr(lang, 'time'),
-                          timeOf(booking.flight.departureTime),
-                        ),
-                        _row(
-                          context,
-                          tr(lang, 'seat'),
-                          booking.seats.join(', '),
-                        ),
-                        _row(
-                          context,
-                          tr(lang, 'class'),
-                          _cabin(lang, booking.cabinClass),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // The QR only appears once the server has confirmed
-                        // payment and issued the public ticket record.
-                        StreamBuilder<PaymentStatus>(
-                          stream: booking.isPaid
-                              ? null
-                              : FirebaseService.watchPaymentStatus(booking.id),
-                          initialData: booking.paymentStatus,
-                          builder: (context, snapshot) {
-                            if (snapshot.data != PaymentStatus.paid) {
-                              return _PendingPayment(booking: booking);
-                            }
-                            return Column(
-                              children: [
-                            // Bigger QR + generous quiet zone + short payload.
-                            // This makes it much easier to scan using another
-                            // phone's camera, Google Lens, or a generic QR app.
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              padding: const EdgeInsets.all(18),
-                              child: QrImageView(
-                                data: qrData,
-                                version: QrVersions.auto,
-                                size: 240,
-                                backgroundColor: Colors.white,
-                                padding: const EdgeInsets.all(12),
-                                gapless: true,
-                                errorCorrectionLevel: QrErrorCorrectLevel.M,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              booking.id,
-                              style: const TextStyle(
-                                letterSpacing: 2,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              tr(lang, 'ticket_qr_hint'),
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                              ],
-                            );
-                          },
-                        ),
-                      ],
-                    ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            tr(lang, 'ticket_qr_hint'),
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -214,29 +143,6 @@ class TicketScreen extends StatelessWidget {
       ),
     );
   }
-
-  Widget _row(BuildContext context, String a, String b) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                a,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                b,
-                textAlign: TextAlign.right,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      );
 }
 
 String _cabin(String lang, CabinClass c) => switch (c) {
@@ -245,6 +151,288 @@ String _cabin(String lang, CabinClass c) => switch (c) {
       CabinClass.business => tr(lang, 'business'),
       CabinClass.first => tr(lang, 'first'),
     };
+
+class _BoardingPass extends StatelessWidget {
+  const _BoardingPass({
+    required this.booking,
+    required this.lang,
+    required this.bottom,
+  });
+
+  final BookingEntity booking;
+  final String lang;
+  final Widget bottom;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final flight = booking.flight;
+    final airline = airlineForFlight(flight.airline, flight.flightNumber);
+    final airlineName = airline == null
+        ? flight.airline
+        : (lang == 'th' ? airline.nameTh : airline.nameEn);
+    final h = flight.duration.inHours;
+    final m = flight.duration.inMinutes.remainder(60);
+    const onHeader = Colors.white; // on AppTheme.heroGradient in both modes
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: .7)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(
+              alpha: theme.brightness == Brightness.dark ? .35 : .08,
+            ),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+            decoration: BoxDecoration(
+              gradient: AppTheme.heroGradient,
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    AirlineLogo(
+                      airlineName: flight.airline,
+                      flightNumber: flight.flightNumber,
+                      size: 40,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            airlineName,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: onHeader,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            '${flight.flightNumber} · ${_cabin(lang, booking.cabinClass)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: onHeader.withValues(alpha: .85),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    _Endpoint(
+                      code: flight.departure.code,
+                      city: lang == 'th' ? flight.departure.cityTh : flight.departure.cityEn,
+                      time: timeOf(flight.departureTime),
+                      color: onHeader,
+                    ),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Icon(Icons.flight_rounded, color: onHeader),
+                          const SizedBox(height: 4),
+                          Container(height: 1.5, color: onHeader.withValues(alpha: .4)),
+                          const SizedBox(height: 6),
+                          Text(
+                            '$h ${tr(lang, 'hours')} $m ${tr(lang, 'minutes')}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: onHeader.withValues(alpha: .9),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _Endpoint(
+                      code: flight.arrival.code,
+                      city: lang == 'th' ? flight.arrival.cityTh : flight.arrival.cityEn,
+                      time: timeOf(flight.arrivalTime),
+                      color: onHeader,
+                      alignEnd: true,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+            child: Column(
+              children: [
+                _Detail(
+                  label: tr(lang, 'passenger'),
+                  value: booking.passengers.map((p) => p.fullName).join(', '),
+                  wide: true,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(child: _Detail(label: tr(lang, 'date'), value: dateOf(flight.departureTime))),
+                    Expanded(child: _Detail(label: tr(lang, 'seat'), value: booking.seats.join(', '))),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(child: _Detail(label: 'Booking ID', value: booking.id)),
+                    Expanded(child: _Detail(label: tr(lang, 'flight'), value: flight.flightNumber)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const _Perforation(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 22),
+            child: bottom,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Endpoint extends StatelessWidget {
+  const _Endpoint({
+    required this.code,
+    required this.city,
+    required this.time,
+    required this.color,
+    this.alignEnd = false,
+  });
+
+  final String code;
+  final String city;
+  final String time;
+  final Color color;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: 96,
+      child: Column(
+        crossAxisAlignment:
+            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Text(
+            code,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .5,
+            ),
+          ),
+          Text(
+            city,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: color.withValues(alpha: .85),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            time,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Detail extends StatelessWidget {
+  const _Detail({required this.label, required this.value, this.wide = false});
+
+  final String label;
+  final String value;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: wide ? double.infinity : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tear line between the flight details and the QR, with side notches.
+class _Perforation extends StatelessWidget {
+  const _Perforation();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final notch = theme.scaffoldBackgroundColor;
+    return SizedBox(
+      height: 36,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: LayoutBuilder(
+              builder: (context, c) => Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(
+                  (c.maxWidth / 12).floor(),
+                  (_) => Container(
+                    width: 6,
+                    height: 1.6,
+                    color: theme.colorScheme.outlineVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: -14,
+            child: CircleAvatar(radius: 14, backgroundColor: notch),
+          ),
+          Positioned(
+            right: -14,
+            child: CircleAvatar(radius: 14, backgroundColor: notch),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _PendingPayment extends StatelessWidget {
   const _PendingPayment({required this.booking});
@@ -259,7 +447,7 @@ class _PendingPayment extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: theme.colorScheme.tertiaryContainer.withValues(alpha: .6),
+        color: AppTheme.pendingBackground(theme.brightness),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -267,7 +455,7 @@ class _PendingPayment extends StatelessWidget {
           Icon(
             Icons.hourglass_top_rounded,
             size: 40,
-            color: theme.colorScheme.onTertiaryContainer,
+            color: AppTheme.pendingForeground(theme.brightness),
           ),
           const SizedBox(height: 8),
           Text(

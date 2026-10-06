@@ -137,15 +137,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
           const SizedBox(height: 16),
           Text(tr(lang, 'payment_method'), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
-          SegmentedButton<PaymentMethod>(
-            segments: const [
-              ButtonSegment(value: PaymentMethod.promptPay, icon: Icon(Icons.qr_code), label: Text('PromptPay')),
-              ButtonSegment(value: PaymentMethod.card, icon: Icon(Icons.credit_card), label: Text('Card')),
-              ButtonSegment(value: PaymentMethod.mobileBanking, icon: Icon(Icons.account_balance), label: Text('Mobile')),
+          Row(
+            children: [
+              for (final (value, icon, label) in [
+                (PaymentMethod.promptPay, Icons.qr_code_2_rounded, 'PromptPay'),
+                (PaymentMethod.card, Icons.credit_card_rounded, tr(lang, 'method_card')),
+                (PaymentMethod.mobileBanking, Icons.account_balance_rounded,
+                    tr(lang, 'method_mobile_banking')),
+              ]) ...[
+                if (value != PaymentMethod.promptPay) const SizedBox(width: 10),
+                Expanded(
+                  child: _MethodOption(
+                    icon: icon,
+                    label: label,
+                    selected: method == value,
+                    onTap: () => setState(() => method = value),
+                  ),
+                ),
+              ],
             ],
-            selected: {method},
-            onSelectionChanged: (v) => setState(() => method = v.first),
-            showSelectedIcon: false,
           ),
           const SizedBox(height: 14),
           if (method == PaymentMethod.promptPay)
@@ -227,6 +237,69 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ],
         ),
       );
+}
+
+class _MethodOption extends StatelessWidget {
+  const _MethodOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? colors.primaryContainer : colors.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: selected ? colors.primary : colors.outlineVariant,
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 76),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    color: selected ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: selected ? colors.onPrimaryContainer : colors.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _LegSummary extends StatelessWidget {

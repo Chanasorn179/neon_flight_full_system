@@ -8,6 +8,7 @@ import '../../providers/booking_provider.dart';
 import '../../providers/flight_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../services/transfer_dispatch_service.dart';
+import '../../widgets/airport_picker.dart';
 import '../../widgets/app_widgets.dart';
 import '../flights/flight_results_screen.dart';
 import 'airport_transfer_section.dart';
@@ -132,7 +133,7 @@ class DashboardScreen extends StatelessWidget {
                   Text(
                     user?.name == null || user!.name.trim().isEmpty
                         ? tr(lang, 'hello')
-                        : '${tr(lang, 'hello')} ${user.name} 👋',
+                        : '${tr(lang, 'hello')} ${user.name}',
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
@@ -322,47 +323,12 @@ class _SearchCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _AirportDrop(
-                    label: tr(lang, 'from'),
-                    value: provider.from,
-                    airports: provider.airports,
-                    lang: lang,
-                    icon: Icons.flight_takeoff_rounded,
-                    onChanged: (v) {
-                      if (v != null) provider.setRoute(v, provider.to);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Container(
-                  margin: const EdgeInsets.only(top: 16),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withValues(alpha: .55),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    tooltip: tr(lang, 'swap'),
-                    onPressed: provider.swapRoute,
-                    icon: const Icon(Icons.swap_horiz_rounded),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _AirportDrop(
-                    label: tr(lang, 'to'),
-                    value: provider.to,
-                    airports: provider.airports,
-                    lang: lang,
-                    icon: Icons.flight_land_rounded,
-                    onChanged: (v) {
-                      if (v != null) provider.setRoute(provider.from, v);
-                    },
-                  ),
-                ),
-              ],
+            RouteSelector(
+              from: provider.from,
+              to: provider.to,
+              airports: provider.airports,
+              lang: lang,
+              onChanged: provider.setRoute,
             ),
             const SizedBox(height: 14),
             LayoutBuilder(
@@ -439,66 +405,6 @@ class _SearchCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _AirportDrop extends StatelessWidget {
-  const _AirportDrop({
-    required this.label,
-    required this.value,
-    required this.airports,
-    required this.lang,
-    required this.onChanged,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final String lang;
-  final List<AirportEntity> airports;
-  final ValueChanged<String?> onChanged;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DropdownButtonFormField<String>(
-      initialValue: airports.any((a) => a.code == value) ? value : null,
-      isExpanded: true,
-      borderRadius: BorderRadius.circular(18),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, size: 20),
-        filled: true,
-        fillColor: theme.colorScheme.surfaceContainerLow,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: .75),
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: .75),
-          ),
-        ),
-      ),
-      items: airports
-          .map(
-            (a) => DropdownMenuItem(
-              value: a.code,
-              child: Text(
-                '${a.code} · ${cityName(lang, a.code, cityTh: a.cityTh, cityEn: a.cityEn)}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          )
-          .toList(),
-      onChanged: onChanged,
     );
   }
 }

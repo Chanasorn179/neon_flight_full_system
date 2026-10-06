@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
 import '../../models/entities.dart';
 import '../../providers/auth_provider.dart';
@@ -71,7 +72,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       ..sort((first, second) => second.pickupTime.compareTo(first.pickupTime));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -91,14 +92,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        theme.colorScheme.primary.withValues(alpha: .94),
-                        const Color(0xFF6A85C3),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    gradient: AppTheme.heroGradient,
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
@@ -275,7 +269,7 @@ class _FlightBookingCard extends StatelessWidget {
     return Container(
       key: ValueKey('booking-card-${booking.id}'),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: .55)),
         boxShadow: [
@@ -328,9 +322,7 @@ class _FlightBookingCard extends StatelessWidget {
                     booking.status != BookingStatus.cancelled)
                   _StatusChip(
                     label: tr(languageCode, 'payment_pending_short'),
-                    color: theme.brightness == Brightness.dark
-                        ? const Color(0xFFFFC266)
-                        : const Color(0xFF9A5B00),
+                    color: AppTheme.pendingForeground(theme.brightness),
                     icon: Icons.hourglass_top_rounded,
                   )
                 else
@@ -390,7 +382,7 @@ class _FlightBookingCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF7F9FD),
+                color: theme.colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(18),
               ),
               child: Row(
@@ -459,7 +451,7 @@ class _TransferBookingCard extends StatelessWidget {
     return Container(
       key: ValueKey('transfer-booking-${booking.id}'),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: .55)),
         boxShadow: [

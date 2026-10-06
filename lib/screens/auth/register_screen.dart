@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
@@ -353,9 +354,7 @@ class _RegisterLogo extends StatelessWidget {
         width: 92,
         height: 92,
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [colors.primary, const Color(0xFF7891C9)],
-          ),
+          gradient: AppTheme.heroGradient,
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(

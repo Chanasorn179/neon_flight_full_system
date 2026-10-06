@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
@@ -163,12 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      theme.colorScheme.primary.withValues(alpha: .95),
-                                      const Color(0xFF6F89C5),
-                                    ],
-                                  ),
+                                  gradient: AppTheme.heroGradient,
                                   borderRadius: BorderRadius.circular(24),
                                 ),
                                 child: Row(
@@ -277,14 +273,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                     ),
                                   ),
-                                  Text(
-                                    tr(lang, 'remember_me'),
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  // Flexible pieces so long translations wrap
+                                  // instead of overflowing on narrow phones.
+                                  Flexible(
+                                    child: GestureDetector(
+                                      onTap: () => auth.setRemember(!auth.rememberMe),
+                                      child: Text(
+                                        tr(lang, 'remember_me'),
+                                        style: const TextStyle(fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
                                   ),
+                                  const SizedBox(width: 8),
                                   const Spacer(),
-                                  TextButton(
-                                    onPressed: auth.loading ? null : _forgot,
-                                    child: Text(tr(lang, 'forgot_password')),
+                                  Flexible(
+                                    flex: 2,
+                                    child: TextButton(
+                                      onPressed: auth.loading ? null : _forgot,
+                                      child: Text(
+                                        tr(lang, 'forgot_password'),
+                                        textAlign: TextAlign.end,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -436,11 +446,7 @@ class _BrandLogo extends StatelessWidget {
         width: 108,
         height: 108,
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [theme.colorScheme.primary, const Color(0xFF7690CC)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          gradient: AppTheme.heroGradient,
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(

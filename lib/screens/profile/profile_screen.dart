@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
 import '../../models/entities.dart';
 import '../../providers/auth_provider.dart';
@@ -312,15 +313,7 @@ class _Header extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            colorScheme.primary,
-            colorScheme.primary.withValues(alpha: .82),
-            const Color(0xFF7B93C9),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppTheme.heroGradient,
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
@@ -454,6 +447,11 @@ class _QuickStatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(22),
+        // Border keeps the card visible in dark mode, where the card colour
+        // is the same as the page background.
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: .7),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: .04),
@@ -522,17 +520,15 @@ class _GroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+    final colors = Theme.of(context).colorScheme;
+    // A Material (not a decorated Container) so the ListTiles inside get
+    // their tap ripple; the border keeps the group visible in dark mode.
+    return Material(
+      color: colors.surfaceContainerLowest,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .04),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .7)),
       ),
       child: Column(children: children),
     );

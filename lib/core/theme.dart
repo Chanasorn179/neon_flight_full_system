@@ -1,8 +1,24 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const _lightSeed = Color(0xFF4268A4);
-  static const _darkSeed = Color(0xFF8AA9E3);
+  // Brand blue. `fidelity` keeps primary close to the seed instead of the
+  // muted tone Material derives by default.
+  static const _lightSeed = Color(0xFF1F5BE0);
+  static const _darkSeed = Color(0xFF7FA6FF);
+
+  /// Brand gradient for hero headers (login, profile, bookings, tickets).
+  /// Fixed in both modes so white text on it keeps >= 4.5:1 contrast.
+  static const heroGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF1846C2), Color(0xFF1E63DB), Color(0xFF0B7896)],
+  );
+
+  /// Soft amber for "waiting" states (payment pending).
+  static Color pendingBackground(Brightness b) =>
+      b == Brightness.dark ? const Color(0xFF3A2C12) : const Color(0xFFFFF3DC);
+  static Color pendingForeground(Brightness b) =>
+      b == Brightness.dark ? const Color(0xFFFFD58A) : const Color(0xFF6B4300);
 
   static ThemeData get light => _build(Brightness.light);
   static ThemeData get dark => _build(Brightness.dark);
@@ -12,7 +28,11 @@ class AppTheme {
     final scheme = ColorScheme.fromSeed(
       seedColor: isDark ? _darkSeed : _lightSeed,
       brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
     ).copyWith(
+      // Cyan accent: the "neon" in the brand, used for gradients and highlights.
+      tertiary: isDark ? const Color(0xFF5FE0F0) : const Color(0xFF0091A8),
+      onTertiary: isDark ? const Color(0xFF00363D) : Colors.white,
       surface: isDark ? const Color(0xFF141820) : const Color(0xFFFBFCFF),
       surfaceContainerLowest:
           isDark ? const Color(0xFF0D1016) : const Color(0xFFFFFFFF),
