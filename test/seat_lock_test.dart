@@ -45,13 +45,13 @@ void main() {
     final repo = MockBookingRepository(api);
     final flight = (await api.searchFlights('BKK', 'CNX', date)).first;
 
-    await repo.create(_booking('NF1', flight, ['12C']));
+    await repo.createAll([_booking('NF1', flight, ['12C'])]);
     expect(await repo.takenSeats(flight), {'12C'});
     await expectLater(
-      repo.create(_booking('NF2', flight, ['12C', '12D'])),
+      repo.createAll([_booking('NF2', flight, ['12C', '12D'])]),
       throwsA(isA<SeatTakenException>()),
     );
-    await repo.create(_booking('NF3', flight, ['12D']));
+    await repo.createAll([_booking('NF3', flight, ['12D'])]);
     expect(await repo.takenSeats(flight), {'12C', '12D'});
   });
 

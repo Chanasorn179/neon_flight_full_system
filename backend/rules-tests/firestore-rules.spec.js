@@ -79,6 +79,26 @@ test('nine seats can be booked in one go', async () => {
   await assertFails(bookWithLocks(alice(), booking({ id: 'NF2', seats: [...seats.map((s) => `9${s}`), '3A'] })));
 });
 
+test('a full round trip (2 bookings, 9 seats each) fits in one batch', async () => {
+  const seats = ['1A', '1B', '1C', '1D', '1E', '1F', '2A', '2B', '2C'];
+  const db = alice();
+  const batch = writeBatch(db);
+  for (const b of [
+    booking({ id: 'NF1', tripId: 'NF1', seats }),
+    booking({ id: 'NF1R', tripId: 'NF1', seats, flightKey: 'FD386_20261123' }),
+  ]) {
+    batch.set(doc(db, `bookings/${b.id}`), b);
+    for (const seat of b.seats) {
+      batch.set(doc(db, `seatLocks/${b.flightKey}_${seat}`), {
+        flightKey: b.flightKey,
+        seat,
+        bookingId: b.id,
+      });
+    }
+  }
+  await assertSucceeds(batch.commit());
+});
+
 test("locks cannot point at someone else's booking or be removed", async () => {
   await seed('bookings/NF9', booking({ id: 'NF9', userId: 'bob' }));
   await assertFails(setDoc(doc(alice(), 'seatLocks/FD385_20261120_12C'), {

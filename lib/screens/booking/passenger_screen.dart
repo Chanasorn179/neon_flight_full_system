@@ -14,10 +14,14 @@ class PassengerScreen extends StatefulWidget {
     super.key,
     required this.flight,
     required this.cabinClass,
+    this.returnFlight,
   });
 
   final FlightEntity flight;
   final CabinClass cabinClass;
+
+  /// Round trip: the return leg, booked after seats are chosen for both legs.
+  final FlightEntity? returnFlight;
 
   @override
   State<PassengerScreen> createState() => _PassengerScreenState();
@@ -127,6 +131,7 @@ class _PassengerScreenState extends State<PassengerScreen> {
           flight: widget.flight,
           cabinClass: widget.cabinClass,
           passengers: passengers,
+          returnFlight: widget.returnFlight,
         ),
       ),
     );

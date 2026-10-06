@@ -9,35 +9,56 @@ class BookingProvider extends ChangeNotifier {
   final List<TransferBookingEntity> transferBookings = [];
   bool loading = false;
 
-  Future<BookingEntity> create({
+  /// Fare for one leg; also used by the payment screen to show the total.
+  static FareBreakdown fareFor(
+    FlightEntity flight,
+    CabinClass cabinClass,
+    int passengerCount,
+    int seatCount,
+  ) =>
+      FareBreakdown(
+        fare: flight.price(cabinClass) * passengerCount,
+        tax: 700 * passengerCount.toDouble(),
+        service: 150 * passengerCount.toDouble(),
+        seatFee: seatCount * cabinClass.seatFee,
+      );
+
+  /// Books one flight, or both legs of a round trip in one all-or-nothing
+  /// write. Returns the outbound booking first.
+  Future<List<BookingEntity>> create({
     required String userId,
     required FlightEntity flight,
     required CabinClass cabinClass,
     required List<PassengerEntity> passengers,
     required List<String> seats,
     required PaymentMethod paymentMethod,
+    FlightEntity? returnFlight,
+    List<String> returnSeats = const [],
   }) async {
-    final fare = FareBreakdown(
-      fare: flight.price(cabinClass) * passengers.length,
-      tax: 700 * passengers.length.toDouble(),
-      service: 150 * passengers.length.toDouble(),
-      seatFee: seats.length * cabinClass.seatFee,
-    );
-    final booking = BookingEntity(
-      id: 'NF${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
-      userId: userId,
-      flight: flight,
-      cabinClass: cabinClass,
-      passengers: passengers,
-      seats: seats,
-      fare: fare,
-      paymentMethod: paymentMethod,
-      status: BookingStatus.upcoming,
-      createdAt: DateTime.now(),
-    );
+    final id =
+        'NF${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+    final now = DateTime.now();
 
-    final created = await repository.create(booking);
-    bookings.insert(0, created);
+    BookingEntity leg(String legId, FlightEntity f, List<String> legSeats) =>
+        BookingEntity(
+          id: legId,
+          userId: userId,
+          flight: f,
+          cabinClass: cabinClass,
+          passengers: passengers,
+          seats: legSeats,
+          fare: fareFor(f, cabinClass, passengers.length, legSeats.length),
+          paymentMethod: paymentMethod,
+          status: BookingStatus.upcoming,
+          createdAt: now,
+          tripId: returnFlight == null ? null : id,
+        );
+
+    final created = await repository.createAll([
+      leg(id, flight, seats),
+      if (returnFlight != null) leg('${id}R', returnFlight, returnSeats),
+    ]);
+    bookings.insertAll(0, created);
     notifyListeners();
     return created;
   }

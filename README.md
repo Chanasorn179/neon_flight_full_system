@@ -11,7 +11,6 @@ The project uses normal Dart imports and does not rely on `part` / `part of`.
 - Login
 - Logout
 - Forgot-password flow
-- Google Sign-In support through Firebase Authentication
 - User profile stored in Firestore
 
 ### Flight Search

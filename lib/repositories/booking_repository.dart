@@ -5,7 +5,8 @@ import '../models/entities.dart';
 import '../services/firebase_service.dart';
 
 abstract class BookingRepository {
-  Future<BookingEntity> create(BookingEntity booking);
+  /// Saves [bookings] all-or-nothing (a round trip is two bookings).
+  Future<List<BookingEntity>> createAll(List<BookingEntity> bookings);
 
   Future<List<BookingEntity>> forUser(String userId);
 
@@ -20,9 +21,11 @@ class MockBookingRepository implements BookingRepository {
   final MockApi api;
 
   @override
-  Future<BookingEntity> create(BookingEntity booking) {
+  Future<List<BookingEntity>> createAll(List<BookingEntity> bookings) {
     // Offline/mock mode has no server to confirm payment.
-    return api.createBooking(booking.withPaymentStatus(PaymentStatus.paid));
+    return api.createBookings([
+      for (final b in bookings) b.withPaymentStatus(PaymentStatus.paid),
+    ]);
   }
 
   @override
@@ -38,19 +41,16 @@ class MockBookingRepository implements BookingRepository {
 /// ใช้ Firebase Firestore จริง
 class FirebaseBookingRepository implements BookingRepository {
   @override
-  Future<BookingEntity> create(BookingEntity booking) async {
+  Future<List<BookingEntity>> createAll(List<BookingEntity> bookings) async {
     if (!FirebaseService.enabled) {
       throw StateError('Firebase is not initialized');
     }
 
-    final data = _bookingToMap(booking);
+    await FirebaseService.saveBookings({
+      for (final b in bookings) b.id: _bookingToMap(b),
+    });
 
-    await FirebaseService.saveBooking(
-      data,
-      booking.id,
-    );
-
-    return booking;
+    return bookings;
   }
 
   @override
@@ -122,6 +122,8 @@ Map<String, dynamic> _bookingToMap(
 
     // Seat locks (seatLocks/{flightKey}_{seat}) are written in the same batch.
     'flightKey': booking.flight.scheduleKey,
+
+    if (booking.tripId != null) 'tripId': booking.tripId,
 
     'fare': _fareToMap(
       booking.fare,
@@ -247,6 +249,8 @@ BookingEntity _bookingFromMap(
     paymentStatus: json['paymentStatus'] == PaymentStatus.pending.name
         ? PaymentStatus.pending
         : PaymentStatus.paid,
+
+    tripId: json['tripId']?.toString(),
   );
 }
 

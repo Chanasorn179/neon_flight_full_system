@@ -19,12 +19,18 @@ class PaymentScreen extends StatefulWidget {
     required this.cabinClass,
     required this.passengers,
     required this.seats,
+    this.returnFlight,
+    this.returnSeats = const [],
   });
 
   final FlightEntity flight;
   final CabinClass cabinClass;
   final List<PassengerEntity> passengers;
   final List<String> seats;
+
+  /// Set for a round trip; both legs are paid and booked together.
+  final FlightEntity? returnFlight;
+  final List<String> returnSeats;
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
@@ -34,34 +40,46 @@ class _PaymentScreenState extends State<PaymentScreen> {
   PaymentMethod method = PaymentMethod.promptPay;
   bool paying = false;
 
-  FareBreakdown get fare => FareBreakdown(
-        fare: widget.flight.price(widget.cabinClass) * widget.passengers.length,
-        tax: 700 * widget.passengers.length.toDouble(),
-        service: 150 * widget.passengers.length.toDouble(),
-        seatFee: widget.seats.length * widget.cabinClass.seatFee,
-      );
+  FareBreakdown get fare {
+    final legs = [
+      BookingProvider.fareFor(widget.flight, widget.cabinClass,
+          widget.passengers.length, widget.seats.length),
+      if (widget.returnFlight != null)
+        BookingProvider.fareFor(widget.returnFlight!, widget.cabinClass,
+            widget.passengers.length, widget.returnSeats.length),
+    ];
+    return FareBreakdown(
+      fare: legs.fold(0, (sum, f) => sum + f.fare),
+      tax: legs.fold(0, (sum, f) => sum + f.tax),
+      service: legs.fold(0, (sum, f) => sum + f.service),
+      seatFee: legs.fold(0, (sum, f) => sum + f.seatFee),
+    );
+  }
 
   Future<void> pay() async {
     if (method == PaymentMethod.promptPay && !PromptPayService.configured) {
+      final lang = context.read<LanguageProvider>().languageCode;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ยังไม่ได้ตั้ง PROMPTPAY_ID จึงยังสร้าง QR รับเงินจริงไม่ได้')),
+        SnackBar(content: Text(tr(lang, 'promptpay_not_configured'))),
       );
       return;
     }
     setState(() => paying = true);
     try {
       final user = context.read<AuthProvider>().currentUser!;
-      final booking = await context.read<BookingProvider>().create(
+      final created = await context.read<BookingProvider>().create(
             userId: user.id,
             flight: widget.flight,
             cabinClass: widget.cabinClass,
             passengers: widget.passengers,
             seats: widget.seats,
             paymentMethod: method,
+            returnFlight: widget.returnFlight,
+            returnSeats: widget.returnSeats,
           );
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => TicketScreen(booking: booking)),
+        MaterialPageRoute(builder: (_) => TicketScreen(booking: created.first)),
         (route) => route.isFirst,
       );
     } on SeatTakenException catch (error) {
@@ -99,33 +117,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      AirlineLogo(
-                        airlineName: widget.flight.airline,
-                        flightNumber: widget.flight.flightNumber,
-                        size: 40,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        '${widget.flight.departure.code} → ${widget.flight.arrival.code}',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-                      ),
-                    ],
-                  ),
-                  Text('${widget.flight.airline} · ${widget.flight.flightNumber} · ${_cabin(lang, widget.cabinClass)}'),
-                  const SizedBox(height: 8),
-                  Text('${tr(lang, 'seat')}: ${widget.seats.join(', ')}'),
-                ],
-              ),
-            ),
+          _LegSummary(
+            label: widget.returnFlight == null ? null : tr(lang, 'outbound_flight'),
+            flight: widget.flight,
+            seats: widget.seats,
+            cabin: _cabin(lang, widget.cabinClass),
+            lang: lang,
           ),
+          if (widget.returnFlight != null) ...[
+            const SizedBox(height: 10),
+            _LegSummary(
+              label: tr(lang, 'return_flight'),
+              flight: widget.returnFlight!,
+              seats: widget.returnSeats,
+              cabin: _cabin(lang, widget.cabinClass),
+              lang: lang,
+            ),
+          ],
           const SizedBox(height: 16),
           Text(tr(lang, 'payment_method'), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
@@ -200,7 +208,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           if (method != PaymentMethod.promptPay) ...[
             const SizedBox(height: 8),
             Text(
-              'หมายเหตุ: บัตรและ Mobile Banking ยังเป็น UI จนกว่าจะเชื่อม payment gateway ของผู้ให้บริการจริง',
+              tr(lang, 'gateway_note'),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -219,6 +227,85 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ],
         ),
       );
+}
+
+class _LegSummary extends StatelessWidget {
+  const _LegSummary({
+    required this.label,
+    required this.flight,
+    required this.seats,
+    required this.cabin,
+    required this.lang,
+  });
+
+  final String? label;
+  final FlightEntity flight;
+  final List<String> seats;
+  final String cabin;
+  final String lang;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (label != null) ...[
+              Text(
+                label!,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                AirlineLogo(
+                  airlineName: flight.airline,
+                  flightNumber: flight.flightNumber,
+                  size: 40,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(flight.departure.code, style: theme.textTheme.titleLarge),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 6),
+                            child: Icon(Icons.arrow_forward_rounded, size: 18),
+                          ),
+                          Text(flight.arrival.code, style: theme.textTheme.titleLarge),
+                        ],
+                      ),
+                      Text(
+                        '${dateOf(flight.departureTime)} · ${timeOf(flight.departureTime)}'
+                        ' · ${flight.flightNumber}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '$cabin · ${tr(lang, 'seat')} ${seats.join(', ')}',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _CardFields extends StatelessWidget {

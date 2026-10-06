@@ -11,17 +11,42 @@ import '../../widgets/app_widgets.dart';
 import '../booking/passenger_screen.dart';
 
 class FlightResultsScreen extends StatelessWidget {
-  const FlightResultsScreen({super.key});
+  const FlightResultsScreen({super.key, this.outbound});
+
+  /// Set on the second step of a round trip: the chosen outbound flight.
+  final FlightEntity? outbound;
 
   @override
   Widget build(BuildContext context) {
     final p = context.watch<FlightProvider>();
     final lang = context.watch<LanguageProvider>().languageCode;
+    final choosingReturn = outbound != null;
+    final from = choosingReturn ? p.to : p.from;
+    final to = choosingReturn ? p.from : p.to;
 
     return Scaffold(
-      appBar: AppBar(title: Text('${p.from} → ${p.to}')),
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(from),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6),
+              child: Icon(Icons.arrow_forward_rounded, size: 20),
+            ),
+            Text(to),
+          ],
+        ),
+      ),
       body: Column(
         children: [
+          if (p.isRoundTrip)
+            _StepBanner(
+              lang: lang,
+              step: choosingReturn ? 2 : 1,
+              title: tr(lang, choosingReturn ? 'choose_return' : 'choose_outbound'),
+              outbound: outbound,
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Row(
@@ -69,6 +94,22 @@ class FlightResultsScreen extends StatelessWidget {
     );
   }
 
+  void _select(BuildContext context, FlightProvider p, FlightEntity flight) {
+    final Widget next;
+    if (p.isRoundTrip && outbound == null) {
+      next = FlightResultsScreen(outbound: flight);
+    } else if (outbound != null) {
+      next = PassengerScreen(
+        flight: outbound!,
+        cabinClass: p.cabinClass,
+        returnFlight: flight,
+      );
+    } else {
+      next = PassengerScreen(flight: flight, cabinClass: p.cabinClass);
+    }
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => next));
+  }
+
   Widget _body(BuildContext context, FlightProvider p, String lang) {
     if (p.loading) return const Center(child: CircularProgressIndicator());
     if (p.error != null) {
@@ -79,22 +120,24 @@ class FlightResultsScreen extends StatelessWidget {
         action: FilledButton(onPressed: p.search, child: Text(tr(lang, 'retry'))),
       );
     }
-    if (p.results.isEmpty) {
+    final flights = outbound == null ? p.results : p.returnOptionsAfter(outbound!);
+    if (flights.isEmpty) {
       return EmptyState(
         icon: Icons.flight_takeoff,
         title: tr(lang, 'no_flights'),
-        subtitle: tr(lang, 'no_flights_sub'),
+        subtitle: tr(lang, outbound == null ? 'no_flights_sub' : 'no_return_flights'),
         action: FilledButton(onPressed: () => Navigator.pop(context), child: Text(tr(lang, 'search_again'))),
       );
     }
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: p.results.length,
+      itemCount: flights.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, i) => FlightCard(
-        flight: p.results[i],
+        flight: flights[i],
         cabinClass: p.cabinClass,
         lang: lang,
+        onSelect: () => _select(context, p, flights[i]),
       ),
     );
   }
@@ -106,11 +149,13 @@ class FlightCard extends StatelessWidget {
     required this.flight,
     required this.cabinClass,
     required this.lang,
+    required this.onSelect,
   });
 
   final FlightEntity flight;
   final CabinClass cabinClass;
   final String lang;
+  final VoidCallback onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -179,15 +224,74 @@ class FlightCard extends StatelessWidget {
                   ),
                 ),
                 FilledButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => PassengerScreen(flight: flight, cabinClass: cabinClass)),
-                  ),
+                  onPressed: onSelect,
                   child: Text(tr(lang, 'select')),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StepBanner extends StatelessWidget {
+  const _StepBanner({
+    required this.lang,
+    required this.step,
+    required this.title,
+    required this.outbound,
+  });
+
+  final String lang;
+  final int step;
+  final String title;
+  final FlightEntity? outbound;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: .55),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            trArgs(lang, 'step_of', {'n': '$step', 'total': '2'}),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(title, style: theme.textTheme.titleMedium),
+          if (outbound != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                AirlineLogo(
+                  airlineName: outbound!.airline,
+                  flightNumber: outbound!.flightNumber,
+                  size: 28,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${tr(lang, 'outbound_flight')}: ${outbound!.flightNumber} · '
+                    '${dateOf(outbound!.departureTime)} ${timeOf(outbound!.departureTime)}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

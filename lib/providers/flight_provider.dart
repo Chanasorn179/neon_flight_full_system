@@ -9,6 +9,9 @@ class FlightProvider extends ChangeNotifier {
   final FlightRepository repository;
   List<AirportEntity> airports = [];
   List<FlightEntity> results = [];
+
+  /// Return-leg options when [isRoundTrip]; same filters as [results].
+  List<FlightEntity> returnResults = [];
   bool loading = false;
   String? error;
   String from = 'BKK';
@@ -28,9 +31,22 @@ class FlightProvider extends ChangeNotifier {
   Future<void> loadAirports() async { airports = await repository.airports(); notifyListeners(); }
   void setRoute(String f, String t) { from = f; to = t; notifyListeners(); }
   void swapRoute() { final v = from; from = to; to = v; notifyListeners(); }
-  void setDeparture(DateTime value) { departureDate = value; notifyListeners(); }
+  void setDeparture(DateTime value) {
+    departureDate = value;
+    // Keep the return date on or after departure.
+    if (returnDate != null && returnDate!.isBefore(value)) returnDate = value;
+    notifyListeners();
+  }
   void setReturn(DateTime? value) { returnDate = value; notifyListeners(); }
-  void setTripType(TripType value) { tripType = value; if (value == TripType.oneWay) returnDate = null; notifyListeners(); }
+  void setTripType(TripType value) {
+    tripType = value;
+    if (value == TripType.oneWay) returnDate = null;
+    // Sensible default so a round-trip search works without extra taps.
+    if (value == TripType.roundTrip) {
+      returnDate ??= departureDate.add(const Duration(days: 3));
+    }
+    notifyListeners();
+  }
   void setCabin(CabinClass value) { cabinClass = value; notifyListeners(); }
   /// Airlines cap a single booking at 9 passengers; the seat-lock rules rely on it.
   static const maxPassengers = 9;
@@ -41,15 +57,29 @@ class FlightProvider extends ChangeNotifier {
   void setMaxPrice(double value) { maxPrice = value; notifyListeners(); }
   void setSort(String value) { sort = value; notifyListeners(); }
 
+  bool get isRoundTrip => tripType == TripType.roundTrip && returnDate != null;
+
+  List<FlightEntity> _filterSort(List<FlightEntity> raw) {
+    final list = raw.where((f) => f.price(cabinClass) <= maxPrice).toList();
+    if (sort == 'cheapest') list.sort((a, b) => a.price(cabinClass).compareTo(b.price(cabinClass)));
+    if (sort == 'earliest') list.sort((a, b) => a.departureTime.compareTo(b.departureTime));
+    if (sort == 'fastest') list.sort((a, b) => a.duration.compareTo(b.duration));
+    return list;
+  }
+
+  /// Return flights that leave after [outbound] lands.
+  List<FlightEntity> returnOptionsAfter(FlightEntity outbound) => returnResults
+      .where((f) => f.departureTime.isAfter(outbound.arrivalTime))
+      .toList();
+
   Future<void> search() async {
     loading = true; error = null; notifyListeners();
     try {
-      final raw = await repository.search(from, to, departureDate);
-      results = raw.where((f) => f.price(cabinClass) <= maxPrice).toList();
-      if (sort == 'cheapest') results.sort((a, b) => a.price(cabinClass).compareTo(b.price(cabinClass)));
-      if (sort == 'earliest') results.sort((a, b) => a.departureTime.compareTo(b.departureTime));
-      if (sort == 'fastest') results.sort((a, b) => a.duration.compareTo(b.duration));
-    } catch (e) { error = e.toString(); results = []; }
+      results = _filterSort(await repository.search(from, to, departureDate));
+      returnResults = isRoundTrip
+          ? _filterSort(await repository.search(to, from, returnDate!))
+          : [];
+    } catch (e) { error = e.toString(); results = []; returnResults = []; }
     finally { loading = false; notifyListeners(); }
   }
 }

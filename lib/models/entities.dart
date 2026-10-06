@@ -200,6 +200,7 @@ class BookingEntity {
     required this.status,
     required this.createdAt,
     this.paymentStatus = PaymentStatus.pending,
+    this.tripId,
   });
   final String id;
   final String userId;
@@ -212,6 +213,9 @@ class BookingEntity {
   final BookingStatus status;
   final DateTime createdAt;
   final PaymentStatus paymentStatus;
+
+  /// Shared by the outbound and return bookings of a round trip.
+  final String? tripId;
 
   bool get isPaid => paymentStatus == PaymentStatus.paid;
 
@@ -227,6 +231,7 @@ class BookingEntity {
         status: status,
         createdAt: createdAt,
         paymentStatus: value,
+        tripId: tripId,
       );
 }
 

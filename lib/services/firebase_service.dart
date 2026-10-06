@@ -84,50 +84,57 @@ class FirebaseService {
   // Bookings
   // ---------------------------------------------------------------------------
 
-  static Future<void> saveBooking(
-      Map<String, dynamic> data,
-      String id,
-      ) async {
+  /// Writes [bookings] (id -> data) and one seat lock per seat in a single
+  /// batch, so a round trip is saved all-or-nothing. firestore.rules only
+  /// accepts new bookings with paymentStatus 'pending' and every seat locked,
+  /// and never lets a lock be overwritten: two people cannot book one seat
+  /// even if they press pay at the same moment.
+  static Future<void> saveBookings(
+    Map<String, Map<String, dynamic>> bookings,
+  ) async {
     if (!enabled) return;
 
-    final bookingData = Map<String, dynamic>.from(data);
+    final batch = firestore.batch();
+    final wanted = <String, Set<String>>{}; // flightKey -> seats
 
-    // Normalize createdAt so new bookings can be sorted/query as Firestore
-    // Timestamp even if a repository sends an ISO-8601 String.
-    bookingData['createdAt'] = _toFirestoreTimestamp(
-      bookingData['createdAt'],
-    );
+    for (final entry in bookings.entries) {
+      final id = entry.key;
+      final data = Map<String, dynamic>.from(entry.value);
+      // Normalize createdAt so bookings sort as Firestore Timestamps.
+      data['createdAt'] = _toFirestoreTimestamp(data['createdAt']);
+      final flightKey = data['flightKey'].toString();
+      final seats = List<String>.from(data['seats'] as List);
+      wanted.putIfAbsent(flightKey, () => {}).addAll(seats);
 
-    final flightKey = bookingData['flightKey'].toString();
-    final seats = List<String>.from(bookingData['seats'] as List);
+      batch.set(firestore.collection('bookings').doc(id), {
+        ...data,
+        'id': id,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      for (final seat in seats) {
+        batch.set(firestore.collection('seatLocks').doc('${flightKey}_$seat'), {
+          'flightKey': flightKey,
+          'seat': seat,
+          'bookingId': id,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    Future<Set<String>> clashes() async => {
+          for (final e in wanted.entries)
+            ...(await takenSeats(e.key)).intersection(e.value),
+        };
 
     // Fail fast with a clear error when a seat is already gone.
-    final clash = (await takenSeats(flightKey)).intersection(seats.toSet());
-    if (clash.isNotEmpty) throw SeatTakenException(clash);
-
-    // One batch: the booking plus one lock per seat. firestore.rules requires
-    // every seat to be locked and never lets a lock be overwritten, so two
-    // people cannot book the same seat even if they press pay together.
-    final batch = firestore.batch();
-    batch.set(firestore.collection('bookings').doc(id), {
-      ...bookingData,
-      'id': id,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    for (final seat in seats) {
-      batch.set(firestore.collection('seatLocks').doc('${flightKey}_$seat'), {
-        'flightKey': flightKey,
-        'seat': seat,
-        'bookingId': id,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
+    final early = await clashes();
+    if (early.isNotEmpty) throw SeatTakenException(early);
 
     try {
       await batch.commit();
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') {
-        final lost = (await takenSeats(flightKey)).intersection(seats.toSet());
+        final lost = await clashes();
         if (lost.isNotEmpty) throw SeatTakenException(lost);
       }
       rethrow;

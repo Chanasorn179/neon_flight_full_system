@@ -159,13 +159,15 @@ class MockApi {
     'HHQ': 40,
   };
 
-  Future<BookingEntity> createBooking(BookingEntity booking) async {
+  Future<List<BookingEntity>> createBookings(List<BookingEntity> bookings) async {
     await _wait();
-    final clash = takenSeats(booking.flight.scheduleKey)
-        .intersection(booking.seats.toSet());
-    if (clash.isNotEmpty) throw SeatTakenException(clash);
-    _bookings.add(booking);
-    return booking;
+    for (final booking in bookings) {
+      final clash = takenSeats(booking.flight.scheduleKey)
+          .intersection(booking.seats.toSet());
+      if (clash.isNotEmpty) throw SeatTakenException(clash);
+    }
+    _bookings.addAll(bookings);
+    return bookings;
   }
 
   Set<String> takenSeats(String scheduleKey) => {

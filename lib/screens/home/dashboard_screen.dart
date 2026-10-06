@@ -27,6 +27,17 @@ class DashboardScreen extends StatelessWidget {
     if (date != null) provider.setDeparture(date);
   }
 
+  Future<void> _pickReturnDate(BuildContext context, FlightProvider provider) async {
+    final first = provider.departureDate;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: provider.returnDate ?? first,
+      firstDate: first,
+      lastDate: first.add(const Duration(days: 365)),
+    );
+    if (date != null) provider.setReturn(date);
+  }
+
   Future<void> _search(BuildContext context) async {
     final provider = context.read<FlightProvider>();
     await provider.search();
@@ -141,6 +152,7 @@ class DashboardScreen extends StatelessWidget {
               provider: provider,
               lang: lang,
               onPickDate: () => _pickDate(context, provider),
+              onPickReturnDate: () => _pickReturnDate(context, provider),
               onSearch: () => _search(context),
             ),
             const SizedBox(height: 26),
@@ -231,12 +243,14 @@ class _SearchCard extends StatelessWidget {
     required this.provider,
     required this.lang,
     required this.onPickDate,
+    required this.onPickReturnDate,
     required this.onSearch,
   });
 
   final FlightProvider provider;
   final String lang;
   final VoidCallback onPickDate;
+  final VoidCallback onPickReturnDate;
   final VoidCallback onSearch;
 
   @override
@@ -361,6 +375,29 @@ class _SearchCard extends StatelessWidget {
                   onTap: onPickDate,
                 );
                 final cabin = _CabinDropdown(provider: provider, lang: lang);
+                if (provider.tripType == TripType.roundTrip) {
+                  final returnDate = _InfoPickerTile(
+                    icon: Icons.event_repeat_rounded,
+                    label: tr(lang, 'return_date'),
+                    value: provider.returnDate == null
+                        ? '-'
+                        : dateOf(provider.returnDate!),
+                    onTap: onPickReturnDate,
+                  );
+                  return Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: date),
+                          const SizedBox(width: 10),
+                          Expanded(child: returnDate),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      cabin,
+                    ],
+                  );
+                }
                 if (narrow) {
                   return Column(
                     children: [

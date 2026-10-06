@@ -16,11 +16,21 @@ class SeatSelectionScreen extends StatefulWidget {
     required this.flight,
     required this.cabinClass,
     required this.passengers,
+    this.returnFlight,
+    this.outbound,
+    this.outboundSeats = const [],
   });
 
   final FlightEntity flight;
   final CabinClass cabinClass;
   final List<PassengerEntity> passengers;
+
+  /// Round trip, outbound step: the leg to pick seats for next.
+  final FlightEntity? returnFlight;
+
+  /// Round trip, return step: the outbound leg and its chosen seats.
+  final FlightEntity? outbound;
+  final List<String> outboundSeats;
 
   @override
   State<SeatSelectionScreen> createState() => _SeatSelectionScreenState();
@@ -112,16 +122,34 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
     HapticFeedback.lightImpact();
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PaymentScreen(
-          flight: widget.flight,
-          cabinClass: widget.cabinClass,
-          passengers: widget.passengers,
-          seats: selected.toList()..sort(),
-        ),
-      ),
-    );
+    final seats = selected.toList()..sort();
+    final Widget next;
+    if (widget.returnFlight != null) {
+      next = SeatSelectionScreen(
+        flight: widget.returnFlight!,
+        cabinClass: widget.cabinClass,
+        passengers: widget.passengers,
+        outbound: widget.flight,
+        outboundSeats: seats,
+      );
+    } else if (widget.outbound != null) {
+      next = PaymentScreen(
+        flight: widget.outbound!,
+        cabinClass: widget.cabinClass,
+        passengers: widget.passengers,
+        seats: widget.outboundSeats,
+        returnFlight: widget.flight,
+        returnSeats: seats,
+      );
+    } else {
+      next = PaymentScreen(
+        flight: widget.flight,
+        cabinClass: widget.cabinClass,
+        passengers: widget.passengers,
+        seats: seats,
+      );
+    }
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => next));
     // Back from payment (e.g. a seat was taken meanwhile): refresh the map.
     await _loadTakenSeats();
   }
@@ -165,6 +193,11 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                   layout: layout,
                   lang: lang,
                   palette: palette,
+                  legLabel: widget.returnFlight != null
+                      ? tr(lang, 'outbound_flight')
+                      : widget.outbound != null
+                          ? tr(lang, 'return_flight')
+                          : null,
                 ),
                 const SizedBox(height: 18),
                 _ProgressCard(
@@ -224,6 +257,7 @@ class _FlightHeaderCard extends StatelessWidget {
     required this.layout,
     required this.lang,
     required this.palette,
+    this.legLabel,
   });
 
   final FlightEntity flight;
@@ -231,6 +265,9 @@ class _FlightHeaderCard extends StatelessWidget {
   final _CabinLayout layout;
   final String lang;
   final _CabinPalette palette;
+
+  /// "Outbound flight" / "Return flight" on a round trip.
+  final String? legLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -337,7 +374,7 @@ class _FlightHeaderCard extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          '${flight.airline} · ${flight.flightNumber}',
+                          [?legLabel, flight.airline, flight.flightNumber].join(' · '),
                           style: theme.textTheme.labelMedium?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
