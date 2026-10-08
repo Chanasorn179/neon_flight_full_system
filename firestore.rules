@@ -146,6 +146,14 @@ service cloud.firestore {
 
     // Public reference data, written only by backend/scripts/seed_firestore.js
     // (Admin SDK bypasses these rules).
+    // Payment settings the app needs before checkout (the shop's PromptPay
+    // receiving number appears in every payment QR anyway). Written only
+    // from the admin page via the Admin SDK.
+    match /appConfig/{name} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /airports/{code} {
       allow read: if true;
       allow write: if false;

@@ -165,6 +165,31 @@ async function reject(db, bookingId) {
   return result;
 }
 
+// Shop payment settings read by the app (appConfig/payment, public read).
+function validatePaymentConfig(input) {
+  const promptPayId = String(input.promptPayId || '').replace(/\D/g, '');
+  // Mobile number (10 digits, starts with 0) or national/tax ID (13 digits).
+  if (!/^0\d{9}$/.test(promptPayId) && !/^\d{13}$/.test(promptPayId)) {
+    throw new Error('Invalid PromptPay ID: use a 10-digit mobile number or a 13-digit ID');
+  }
+  const merchantName = String(input.merchantName || 'NEON FLIGHT').trim().slice(0, 40) || 'NEON FLIGHT';
+  return { promptPayId, merchantName };
+}
+
+async function getPaymentConfig(db) {
+  const snap = await db.collection('appConfig').doc('payment').get();
+  return snap.exists ? snap.data() : {};
+}
+
+async function setPaymentConfig(db, input) {
+  const config = validatePaymentConfig(input);
+  await db.collection('appConfig').doc('payment').set({
+    ...config,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return config;
+}
+
 let firestore;
 // Firestore through the Admin SDK (GOOGLE_APPLICATION_CREDENTIALS).
 function adminDb() {
@@ -209,4 +234,14 @@ if (require.main === module) {
   });
 }
 
-module.exports = { publicTicketFor, summarize, list, confirm, reject, adminDb };
+module.exports = {
+  publicTicketFor,
+  summarize,
+  list,
+  confirm,
+  reject,
+  adminDb,
+  validatePaymentConfig,
+  getPaymentConfig,
+  setPaymentConfig,
+};

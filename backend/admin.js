@@ -18,6 +18,7 @@ function sameKey(given, expected) {
  */
 function createAdminRouter({ adminKey, service }) {
   const router = express.Router();
+  router.use(express.json());
 
   router.use((req, res, next) => {
     if (!adminKey) {
@@ -35,7 +36,10 @@ function createAdminRouter({ adminKey, service }) {
     } catch (error) {
       const notFound = /not found/i.test(error.message);
       const conflict = /not pending|cancelled/i.test(error.message);
-      res.status(notFound ? 404 : conflict ? 409 : 500).json({ message: error.message });
+      const invalid = /invalid/i.test(error.message);
+      res
+        .status(notFound ? 404 : conflict ? 409 : invalid ? 400 : 500)
+        .json({ message: error.message });
     }
   };
 
@@ -51,6 +55,10 @@ function createAdminRouter({ adminKey, service }) {
   })));
 
   router.post('/bookings/:id/reject', handle(async (req) => service().reject(req.params.id)));
+
+  router.get('/config/payment', handle(async () => service().getPaymentConfig()));
+
+  router.put('/config/payment', handle(async (req) => service().setPaymentConfig(req.body || {})));
 
   return router;
 }

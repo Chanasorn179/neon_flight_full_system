@@ -10,6 +10,7 @@ import '../../data/payment_catalog.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/payment_methods_provider.dart';
 import '../profile/payment_methods_screen.dart';
+import '../../services/bank_apps.dart';
 import '../../services/promptpay_service.dart';
 import '../../widgets/airline_logo.dart';
 import '../../widgets/app_widgets.dart';
@@ -55,6 +56,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (user != null && methods.methods.isEmpty) {
       Future.microtask(() => methods.load(user.id));
     }
+    PromptPayService.loadConfig().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// Bank of the selected saved mobile-banking method, if any.
+  BankOption? _selectedBank(PaymentMethodsProvider methods) {
+    final m = methods.methods.where((m) => m.id == savedId).firstOrNull;
+    return m == null ? null : bankFromStored(m.detail);
   }
 
   /// Preselects the user's default saved method once it is available.
@@ -122,7 +132,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> pay() async {
-    if (method == PaymentMethod.promptPay && !PromptPayService.configured) {
+    if (method != PaymentMethod.card && !PromptPayService.configured) {
       final lang = context.read<LanguageProvider>().languageCode;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(tr(lang, 'promptpay_not_configured'))),
@@ -242,54 +252,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
           const SizedBox(height: 14),
           if (method == PaymentMethod.promptPay)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  children: [
-                    if (promptPayPayload != null)
-                      Container(
-                        color: Colors.white,
-                        padding: const EdgeInsets.all(10),
-                        child: QrImageView(
-                          data: promptPayPayload,
-                          size: 190,
-                          backgroundColor: Colors.white,
-                        ),
-                      )
-                    else
-                      Container(
-                        width: 190,
-                        height: 190,
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: const Center(
-                          child: Icon(Icons.qr_code_2_rounded, size: 110),
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    Text(
-                      tr(
-                        lang,
-                        promptPayPayload != null
-                            ? 'promptpay_scan_to_pay'
-                            : 'promptpay_not_configured',
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    Text(
-                      money(fare.total),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            _QrPayPanel(
+              payload: promptPayPayload,
+              amount: fare.total,
+              lang: lang,
             )
           else ...[
             if (savedOfType.isNotEmpty)
@@ -303,8 +269,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
             if (method == PaymentMethod.card &&
                 (savedOfType.isEmpty || savedId == null))
               const _CardFields(),
-            if (method == PaymentMethod.mobileBanking && savedOfType.isEmpty)
-              _BankInfo(lang: lang),
+            if (method == PaymentMethod.mobileBanking) ...[
+              const SizedBox(height: 12),
+              if (savedOfType.isEmpty)
+                Text(tr(lang, 'choose_bank_first'))
+              else
+                _QrPayPanel(
+                  payload: promptPayPayload,
+                  amount: fare.total,
+                  lang: lang,
+                  bank: _selectedBank(savedMethods),
+                ),
+            ],
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -326,7 +302,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 children: [
                   _line(tr(lang, 'fare'), fare.fare),
                   _line(tr(lang, 'airport_tax'), fare.tax),
-                  if (fare.service > 0) _line(tr(lang, 'service_fee'), fare.service),
+                  if (fare.service > 0)
+                    _line(tr(lang, 'service_fee'), fare.service),
                   _line(tr(lang, 'seat_fee'), fare.seatFee),
                   const Divider(),
                   _line(tr(lang, 'total'), fare.total, bold: true),
@@ -645,17 +622,169 @@ class _CardFields extends StatelessWidget {
   );
 }
 
-class _BankInfo extends StatelessWidget {
-  const _BankInfo({required this.lang});
+/// Thai QR (PromptPay) for the amount due, with "save to photos" and, for
+/// mobile banking, a button that opens the chosen bank's app.
+class _QrPayPanel extends StatefulWidget {
+  const _QrPayPanel({
+    required this.payload,
+    required this.amount,
+    required this.lang,
+    this.bank,
+  });
+
+  final String? payload;
+  final double amount;
   final String lang;
+  final BankOption? bank;
+
   @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      leading: const Icon(Icons.account_balance),
-      title: const Text('Mobile Banking'),
-      subtitle: Text(tr(lang, 'mobile_bank_info')),
-    ),
-  );
+  State<_QrPayPanel> createState() => _QrPayPanelState();
+}
+
+class _QrPayPanelState extends State<_QrPayPanel> {
+  bool saving = false;
+
+  Future<void> _save() async {
+    final payload = widget.payload;
+    if (payload == null) return;
+    setState(() => saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final ok = await saveQrToGallery(
+        payload,
+        'neon-flight-pay-${DateTime.now().millisecondsSinceEpoch}',
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(tr(widget.lang, ok ? 'qr_saved' : 'qr_save_denied')),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(tr(widget.lang, 'save_failed'))),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _openBank() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final opened = await openBankApp(widget.bank!).catchError((_) => false);
+    if (!opened) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(tr(widget.lang, 'open_bank_failed'))),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final lang = widget.lang;
+    final payload = widget.payload;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            if (payload != null)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(10),
+                child: QrImageView(
+                  data: payload,
+                  size: 200,
+                  backgroundColor: Colors.white,
+                ),
+              )
+            else
+              Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Center(
+                  child: Icon(Icons.qr_code_2_rounded, size: 110),
+                ),
+              ),
+            const SizedBox(height: 10),
+            if (payload != null)
+              Text(
+                trArgs(lang, 'pay_to', {
+                  'name': PromptPayService.merchantName,
+                  'id': PromptPayService.maskedMerchantId,
+                }),
+                style: theme.textTheme.bodySmall,
+              )
+            else
+              Text(
+                tr(lang, 'promptpay_not_configured'),
+                textAlign: TextAlign.center,
+              ),
+            Text(
+              money(widget.amount),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (payload != null) ...[
+              if (widget.bank != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  tr(lang, 'mobile_bank_steps'),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ] else
+                Text(
+                  tr(lang, 'promptpay_scan_to_pay'),
+                  style: theme.textTheme.bodySmall,
+                ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: saving ? null : _save,
+                      icon: const Icon(Icons.download_rounded),
+                      label: Text(tr(lang, 'save_qr')),
+                    ),
+                  ),
+                  if (widget.bank != null) ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: widget.bank!.color,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _openBank,
+                        icon: const Icon(Icons.open_in_new_rounded),
+                        label: Text(
+                          trArgs(lang, 'open_bank_app', {
+                            'app': widget.bank!.app,
+                          }),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _cabin(String lang, CabinClass c) => switch (c) {

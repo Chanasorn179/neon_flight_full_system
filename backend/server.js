@@ -299,6 +299,8 @@ app.use('/api/admin', createAdminRouter({
         list: (state) => payments.list(firestore, state),
         confirm: (id, by) => payments.confirm(firestore, id, by),
         reject: (id) => payments.reject(firestore, id),
+        getPaymentConfig: () => payments.getPaymentConfig(firestore),
+        setPaymentConfig: (input) => payments.setPaymentConfig(firestore, input),
       };
     }
     return paymentService;

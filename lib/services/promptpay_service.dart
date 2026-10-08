@@ -1,7 +1,41 @@
+import 'firebase_service.dart';
+
 class PromptPayService {
-  static const merchantId = String.fromEnvironment('PROMPTPAY_ID', defaultValue: '');
+  /// Build-time override; otherwise the admin sets it in appConfig/payment.
+  static const _buildMerchantId = String.fromEnvironment(
+    'PROMPTPAY_ID',
+    defaultValue: '',
+  );
+
+  static String _remoteMerchantId = '';
+
+  /// Shop name shown under the QR (from appConfig/payment).
+  static String merchantName = 'NEON FLIGHT';
+
+  static String get merchantId =>
+      _buildMerchantId.trim().isNotEmpty ? _buildMerchantId : _remoteMerchantId;
 
   static bool get configured => merchantId.trim().isNotEmpty;
+
+  /// Receiving number with all but the last 4 digits hidden.
+  static String get maskedMerchantId {
+    final digits = merchantId.replaceAll(RegExp(r'\D'), '');
+    if (digits.length <= 4) return digits;
+    return '${'•' * (digits.length - 4)}${digits.substring(digits.length - 4)}';
+  }
+
+  /// Loads the shop's PromptPay number set from the admin page.
+  static Future<void> loadConfig() async {
+    try {
+      final config = await FirebaseService.paymentConfig();
+      if (config == null) return;
+      _remoteMerchantId = (config['promptPayId'] ?? '').toString().trim();
+      final name = (config['merchantName'] ?? '').toString().trim();
+      if (name.isNotEmpty) merchantName = name;
+    } catch (_) {
+      // Keep whatever was configured before.
+    }
+  }
 
   static String payload({required double amount, String? promptPayId}) {
     final target = (promptPayId ?? merchantId).replaceAll(RegExp(r'\D'), '');
@@ -35,14 +69,17 @@ class PromptPayService {
     return aid + target;
   }
 
-  static String _field(String id, String value) => '$id${value.length.toString().padLeft(2, '0')}$value';
+  static String _field(String id, String value) =>
+      '$id${value.length.toString().padLeft(2, '0')}$value';
 
   static String _crc16(String input) {
     var crc = 0xFFFF;
     for (final c in input.codeUnits) {
       crc ^= c << 8;
       for (var i = 0; i < 8; i++) {
-        crc = (crc & 0x8000) != 0 ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF;
+        crc = (crc & 0x8000) != 0
+            ? ((crc << 1) ^ 0x1021) & 0xFFFF
+            : (crc << 1) & 0xFFFF;
       }
     }
     return crc.toRadixString(16).toUpperCase().padLeft(4, '0');

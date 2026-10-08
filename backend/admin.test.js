@@ -21,6 +21,12 @@ const fakeService = () => {
     service: () => ({
       list: async (state) => { calls.push(['list', state]); return [{ id: 'NF1' }]; },
       confirm: async (id, by) => { calls.push(['confirm', id, by]); return [id]; },
+      getPaymentConfig: async () => ({ promptPayId: '0812345678', merchantName: 'NEON FLIGHT' }),
+      setPaymentConfig: async (input) => {
+        calls.push(['setPaymentConfig', input.promptPayId]);
+        if (input.promptPayId === 'bad') throw new Error('Invalid PromptPay ID');
+        return input;
+      },
       reject: async (id) => {
         if (id === 'NF404') throw new Error('Booking NF404 not found');
         calls.push(['reject', id]);
@@ -70,4 +76,25 @@ test('admin API lists, confirms and rejects with the right key', async (t) => {
     ['confirm', 'NF1', 'admin-web'],
     ['reject', 'NF2'],
   ]);
+});
+
+test('admin API reads and validates the PromptPay settings', async (t) => {
+  const { service } = fakeService();
+  const base = await start(createAdminRouter({ adminKey: 'secret-key', service }), t);
+  const headers = { 'X-Admin-Key': 'secret-key', 'Content-Type': 'application/json' };
+  const got = await (await fetch(`${base}/config/payment`, { headers })).json();
+  assert.equal(got.promptPayId, '0812345678');
+  const bad = await fetch(`${base}/config/payment`, {
+    method: 'PUT', headers, body: JSON.stringify({ promptPayId: 'bad' }),
+  });
+  assert.equal(bad.status, 400);
+});
+
+test('PromptPay ID must be a mobile number or 13-digit ID', () => {
+  const { validatePaymentConfig } = require('./scripts/payments');
+  assert.deepEqual(validatePaymentConfig({ promptPayId: '081-234-5678' }), {
+    promptPayId: '0812345678', merchantName: 'NEON FLIGHT',
+  });
+  assert.equal(validatePaymentConfig({ promptPayId: '1234567890123', merchantName: 'Shop' }).merchantName, 'Shop');
+  assert.throws(() => validatePaymentConfig({ promptPayId: '12345' }), /Invalid/);
 });

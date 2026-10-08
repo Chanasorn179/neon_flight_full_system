@@ -18,30 +18,81 @@ const cardBrands = <CardBrand>[
 ];
 
 CardBrand cardBrandNamed(String name) => cardBrands.firstWhere(
-      (b) => b.name.toLowerCase() == name.toLowerCase(),
-      orElse: () => const CardBrand('Card', [Color(0xFF3A4252), Color(0xFF5B6475)]),
-    );
+  (b) => b.name.toLowerCase() == name.toLowerCase(),
+  orElse: () => const CardBrand('Card', [Color(0xFF3A4252), Color(0xFF5B6475)]),
+);
 
 /// Thai banks offered for mobile banking.
 class BankOption {
-  const BankOption(this.nameEn, this.nameTh, this.app, this.color);
+  const BankOption(
+    this.nameEn,
+    this.nameTh,
+    this.app,
+    this.color,
+    this.androidPackage,
+  );
   final String nameEn;
   final String nameTh;
   final String app;
   final Color color;
+
+  /// Play Store id of the bank's app, used to open it for payment.
+  final String androidPackage;
 
   /// Stored as the method detail (no account numbers).
   String get stored => '$nameEn ($app)';
 }
 
 const thaiBanks = <BankOption>[
-  BankOption('Kasikornbank', 'กสิกรไทย', 'K PLUS', Color(0xFF138F2D)),
-  BankOption('SCB', 'ไทยพาณิชย์', 'SCB EASY', Color(0xFF4E2E7F)),
-  BankOption('Bangkok Bank', 'กรุงเทพ', 'Bualuang mBanking', Color(0xFF1E4598)),
-  BankOption('Krungthai', 'กรุงไทย', 'Krungthai NEXT', Color(0xFF1287C4)),
-  BankOption('Krungsri', 'กรุงศรี', 'KMA', Color(0xFF8A6A00)),
-  BankOption('ttb', 'ทีทีบี', 'ttb touch', Color(0xFF0050F0)),
-  BankOption('GSB', 'ออมสิน', 'MyMo', Color(0xFFC2177A)),
+  BankOption(
+    'Kasikornbank',
+    'กสิกรไทย',
+    'K PLUS',
+    Color(0xFF138F2D),
+    'com.kasikorn.retail.mbanking.wap',
+  ),
+  BankOption(
+    'SCB',
+    'ไทยพาณิชย์',
+    'SCB EASY',
+    Color(0xFF4E2E7F),
+    'com.scb.phone',
+  ),
+  BankOption(
+    'Bangkok Bank',
+    'กรุงเทพ',
+    'Bualuang mBanking',
+    Color(0xFF1E4598),
+    'com.bbl.mobilebanking',
+  ),
+  BankOption(
+    'Krungthai',
+    'กรุงไทย',
+    'Krungthai NEXT',
+    Color(0xFF1287C4),
+    'ktbcs.netbank',
+  ),
+  BankOption(
+    'Krungsri',
+    'กรุงศรี',
+    'KMA',
+    Color(0xFF8A6A00),
+    'com.krungsri.kma',
+  ),
+  BankOption(
+    'ttb',
+    'ทีทีบี',
+    'ttb touch',
+    Color(0xFF0050F0),
+    'com.TMBTOUCH.PRODUCTION',
+  ),
+  BankOption(
+    'GSB',
+    'ออมสิน',
+    'MyMo',
+    Color(0xFFC2177A),
+    'com.mobilife.gsb.mymo',
+  ),
 ];
 
 BankOption? bankFromStored(String detail) {

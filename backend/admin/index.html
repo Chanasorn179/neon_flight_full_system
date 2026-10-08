@@ -48,6 +48,10 @@
   #login h2 { margin: 0 0 6px; }
   #login p { margin: 0 0 18px; color: var(--muted); }
   label { display: block; font-weight: 600; margin-bottom: 6px; }
+  #settings { padding: 22px; max-width: 520px; display: grid; gap: 10px; }
+  #settings h2 { margin: 0; }
+  #settings input { width: 100%; min-height: 48px; padding: 0 14px; border-radius: 14px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--text); }
   input[type=password] {
     width: 100%; min-height: 48px; padding: 0 14px; border-radius: 14px;
     border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
@@ -134,7 +138,18 @@
       <button class="tab" role="tab" data-state="pending" aria-selected="true">รอยืนยัน<span class="count" id="pendingCount">0</span></button>
       <button class="tab" role="tab" data-state="paid" aria-selected="false">ชำระแล้ว</button>
       <button class="tab" role="tab" data-state="cancelled" aria-selected="false">ยกเลิกแล้ว</button>
+      <button class="tab" role="tab" data-state="settings" aria-selected="false">ตั้งค่า</button>
     </div>
+    <form id="settings" class="card" hidden>
+      <h2>รับเงินผ่าน PromptPay</h2>
+      <p class="meta">แอปใช้ข้อมูลนี้สร้าง QR ให้ผู้โดยสารสแกนจ่าย เงินจะเข้าบัญชีที่ผูกกับ PromptPay นี้</p>
+      <label for="ppId">เบอร์มือถือ (10 หลัก) หรือเลขบัตรประชาชน / เลขผู้เสียภาษี (13 หลัก)</label>
+      <input id="ppId" inputmode="numeric" autocomplete="off" required>
+      <label for="ppName">ชื่อร้านที่แสดงใต้ QR</label>
+      <input id="ppName" maxlength="40" placeholder="NEON FLIGHT">
+      <button class="primary" type="submit">บันทึก</button>
+      <div class="error" id="settingsMsg" role="status"></div>
+    </form>
     <div class="stats" id="stats"></div>
     <div class="hint" id="hint">ก่อนกดยืนยัน ให้ตรวจในแอปธนาคารว่าได้รับเงิน<b>ตรงตามยอด</b> และหมายเหตุการโอนตรงกับ Booking ID (ราคาคำนวณในแอปผู้ใช้)</div>
     <div id="list" aria-live="polite"></div>
@@ -270,7 +285,40 @@
       el('div', { className: 'card stat' }, el('span', {}, 'ยอดรวม'), el('b', {}, baht(total))));
   }
 
+  async function loadSettings() {
+    $('settingsMsg').textContent = '';
+    try {
+      const config = await api('/config/payment');
+      $('ppId').value = config.promptPayId || '';
+      $('ppName').value = config.merchantName || '';
+    } catch (e) {
+      if (e.message !== 'unauthorized') $('settingsMsg').textContent = e.message;
+    }
+  }
+
+  $('settings').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    $('settingsMsg').textContent = '';
+    try {
+      const saved = await api('/config/payment', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ promptPayId: $('ppId').value, merchantName: $('ppName').value }),
+      });
+      $('ppId').value = saved.promptPayId;
+      $('ppName').value = saved.merchantName;
+      toast('บันทึกแล้ว แอปจะใช้เบอร์นี้ในการชำระครั้งถัดไป');
+    } catch (e) {
+      if (e.message !== 'unauthorized') $('settingsMsg').textContent = e.message;
+    }
+  });
+
   async function load() {
+    const settings = state === 'settings';
+    $('settings').hidden = !settings;
+    $('stats').hidden = settings;
+    $('list').hidden = settings;
+    if (settings) { $('hint').hidden = true; return loadSettings(); }
     $('list').replaceChildren(el('div', { className: 'empty' }, 'กำลังโหลด...'));
     try {
       const [{ bookings }, pending] = await Promise.all([

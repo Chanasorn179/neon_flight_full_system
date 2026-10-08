@@ -173,6 +173,12 @@ test('saved payment methods: display fields only, isDefault must be a bool', asy
   await assertFails(setDoc(doc(bob, path), card));
 });
 
+test('payment config is public to read and server-only to write', async () => {
+  await seed('appConfig/payment', { promptPayId: '0812345678', merchantName: 'NEON FLIGHT' });
+  await assertSucceeds(getDoc(doc(anon(), 'appConfig/payment')));
+  await assertFails(setDoc(doc(alice(), 'appConfig/payment'), { promptPayId: '0899999999' }));
+});
+
 test('user reads only their own bookings', async () => {
   await seed('bookings/NF1', booking());
   await seed('bookings/NF2', booking({ id: 'NF2', userId: 'bob' }));

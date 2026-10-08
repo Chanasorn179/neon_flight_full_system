@@ -280,6 +280,13 @@ class FirebaseService {
         );
   }
 
+  /// Public payment settings set by the admin (appConfig/payment).
+  static Future<Map<String, dynamic>?> paymentConfig() async {
+    if (!enabled) return null;
+    final doc = await firestore.collection('appConfig').doc('payment').get();
+    return doc.data();
+  }
+
   /// Reads the public verification record. Anyone may `get` a single ticket by
   /// its tokenized ID, so this works for staff scanning another user's ticket.
   static Future<Map<String, dynamic>?> publicTicket(String bookingId) async {

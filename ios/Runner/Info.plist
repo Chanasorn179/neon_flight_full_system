@@ -68,6 +68,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Save the payment QR so you can pay from your banking app.</string>
     <key>NSCameraUsageDescription</key>
     <string>ใช้กล้องเพื่อสแกน QR ของ E-Ticket</string>
 </dict>
