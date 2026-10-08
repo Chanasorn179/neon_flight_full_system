@@ -2,6 +2,9 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
@@ -12,8 +15,10 @@ import '../../widgets/airline_logo.dart';
 import '../../widgets/app_widgets.dart';
 
 /// Boarding moment between seat selection and payment: a tilted boarding
-/// pass with "cabin doors closed", then the plane flies the real route on a
-/// night map and the camera dives into the destination. Tap to skip.
+/// pass with "cabin doors closed", then the plane flies the great-circle
+/// route over a real Earth (NASA Blue Marble on a shader globe), and the
+/// camera lands on a street map of the actual destination airport.
+/// Tap anywhere to skip; skipped entirely when the OS reduces motion.
 class TakeoffScreen extends StatefulWidget {
   const TakeoffScreen({
     super.key,
@@ -32,21 +37,51 @@ class TakeoffScreen extends StatefulWidget {
   State<TakeoffScreen> createState() => _TakeoffScreenState();
 }
 
+/// Shader + Earth texture, loaded once and reused.
+class _GlobeAssets {
+  _GlobeAssets(this.program, this.earth);
+  final ui.FragmentProgram program;
+  final ui.Image earth;
+
+  static Future<_GlobeAssets>? _future;
+  static Future<_GlobeAssets> load() => _future ??= () async {
+    final program = await ui.FragmentProgram.fromAsset('shaders/globe.frag');
+    final data = await rootBundle.load('assets/earth/earth_4096.jpg');
+    final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+    final frame = await codec.getNextFrame();
+    return _GlobeAssets(program, frame.image);
+  }();
+}
+
+// Timeline (fraction of the whole animation).
+const _passEnd = .20;
+const _globeStart = .16;
+const _globeEnd = .80;
+const _mapStart = .76;
+
 class _TakeoffScreenState extends State<TakeoffScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c =
       AnimationController(
         vsync: this,
-        duration: const Duration(milliseconds: 5200),
+        duration: const Duration(milliseconds: 8000),
       )..addStatusListener((s) {
         if (s == AnimationStatus.completed) _finish();
       });
 
   bool _done = false;
+  _GlobeAssets? _globe;
 
   @override
   void initState() {
     super.initState();
+    _GlobeAssets.load()
+        .then((g) {
+          if (mounted) setState(() => _globe = g);
+        })
+        .catchError((_) {
+          // No shader support: the route still draws on a dark background.
+        });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (MediaQuery.disableAnimationsOf(context)) {
@@ -76,13 +111,17 @@ class _TakeoffScreenState extends State<TakeoffScreen>
     super.dispose();
   }
 
+  double _phase(double t, double start, double end) =>
+      ((t - start) / (end - start)).clamp(0.0, 1.0);
+
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<LanguageProvider>().languageCode;
     final f = widget.flight;
+    final dest = airportCoordinates[f.arrival.code];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF070A10),
+      backgroundColor: const Color(0xFF05070C),
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _finish,
@@ -90,22 +129,38 @@ class _TakeoffScreenState extends State<TakeoffScreen>
           animation: _c,
           builder: (context, _) {
             final t = _c.value;
-            // 0.00–0.38 boarding pass · 0.30–1.00 route flight (crossfade).
-            final passOpacity = (1 - ((t - .30) / .08)).clamp(0.0, 1.0);
-            final mapOpacity = ((t - .30) / .08).clamp(0.0, 1.0);
-            final flight = ((t - .36) / .64).clamp(0.0, 1.0);
+            final passOpacity = 1 - _phase(t, _globeStart, _passEnd);
+            final globeOpacity =
+                _phase(t, _globeStart, _passEnd) *
+                (1 - _phase(t, _mapStart, _globeEnd));
+            final mapOpacity = _phase(t, _mapStart, _globeEnd);
+            final globeT = _phase(t, _globeStart, _globeEnd);
+            final mapT = _phase(t, _mapStart, 1);
+
             return Stack(
               fit: StackFit.expand,
               children: [
-                if (mapOpacity > 0)
+                if (globeOpacity > 0)
+                  Opacity(
+                    opacity: globeOpacity,
+                    child: CustomPaint(
+                      painter: _GlobePainter(
+                        assets: _globe,
+                        from: f.departure,
+                        to: f.arrival,
+                        progress: globeT,
+                        lang: lang,
+                      ),
+                    ),
+                  ),
+                if (mapOpacity > 0 && dest != null)
                   Opacity(
                     opacity: mapOpacity,
-                    child: CustomPaint(
-                      painter: _RouteMapPainter(
-                        from: f.departure.code,
-                        to: f.arrival.code,
-                        progress: flight,
-                      ),
+                    child: _DestinationMap(
+                      airport: f.arrival,
+                      at: dest,
+                      progress: mapT,
+                      lang: lang,
                     ),
                   ),
                 if (passOpacity > 0)
@@ -115,20 +170,32 @@ class _TakeoffScreenState extends State<TakeoffScreen>
                       flight: f,
                       seats: widget.seats,
                       lang: lang,
-                      t: (t / .30).clamp(0.0, 1.0),
+                      t: _phase(t, 0, _globeStart),
                     ),
                   ),
-                if (mapOpacity > 0)
+                if (globeOpacity > 0)
                   Positioned(
                     left: 24,
                     right: 24,
                     bottom: 48,
                     child: Opacity(
-                      opacity: mapOpacity,
+                      opacity: globeOpacity,
                       child: _FlightStatus(
                         flight: f,
-                        progress: flight,
+                        progress: _GlobePainter.flyProgress(globeT),
                         lang: lang,
+                      ),
+                    ),
+                  ),
+                if (globeOpacity > 0)
+                  Positioned(
+                    left: 16,
+                    bottom: 16,
+                    child: Text(
+                      'Imagery: NASA Earth Observatory',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .45),
+                        fontSize: 10,
                       ),
                     ),
                   ),
@@ -138,7 +205,9 @@ class _TakeoffScreenState extends State<TakeoffScreen>
                   child: TextButton(
                     onPressed: _finish,
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.white70,
+                      foregroundColor: mapOpacity > .5
+                          ? Colors.black87
+                          : Colors.white70,
                     ),
                     child: Text(tr(lang, 'skip')),
                   ),
@@ -417,186 +486,379 @@ class _FlightStatus extends StatelessWidget {
   }
 }
 
-/// Night map: every known airport as a light, the great-circle-ish route,
-/// and the plane flying it. The camera follows the plane and dives toward
-/// the destination at the end.
-class _RouteMapPainter extends CustomPainter {
-  _RouteMapPainter({
+/// Unit vector for a (lat, lon) in degrees.
+(double, double, double) _vec((double, double) p) {
+  final lat = p.$1 * math.pi / 180, lon = p.$2 * math.pi / 180;
+  return (
+    math.cos(lat) * math.cos(lon),
+    math.cos(lat) * math.sin(lon),
+    math.sin(lat),
+  );
+}
+
+/// Point a fraction [f] along the great circle from [a] to [b], as (lat, lon)
+/// in radians.
+(double, double) _slerp((double, double) a, (double, double) b, double f) {
+  final va = _vec(a), vb = _vec(b);
+  final dot = (va.$1 * vb.$1 + va.$2 * vb.$2 + va.$3 * vb.$3).clamp(-1.0, 1.0);
+  final omega = math.acos(dot);
+  if (omega < 1e-6) return (a.$1 * math.pi / 180, a.$2 * math.pi / 180);
+  final s1 = math.sin((1 - f) * omega) / math.sin(omega);
+  final s2 = math.sin(f * omega) / math.sin(omega);
+  final x = s1 * va.$1 + s2 * vb.$1,
+      y = s1 * va.$2 + s2 * vb.$2,
+      z = s1 * va.$3 + s2 * vb.$3;
+  return (math.atan2(z, math.sqrt(x * x + y * y)), math.atan2(y, x));
+}
+
+/// Earth from space with the great-circle route. The camera starts on the
+/// whole globe over the departure airport, zooms to fit the route, follows
+/// the plane, then dives toward the destination.
+class _GlobePainter extends CustomPainter {
+  _GlobePainter({
+    required this.assets,
     required this.from,
     required this.to,
     required this.progress,
+    required this.lang,
   });
 
-  final String from;
-  final String to;
+  final _GlobeAssets? assets;
+  final AirportEntity from;
+  final AirportEntity to;
   final double progress;
+  final String lang;
 
   static const _plane = Icons.flight_rounded;
 
+  /// How far along the route the plane is for a given globe-phase progress.
+  static double flyProgress(double p) =>
+      Curves.easeInOutSine.transform(((p - .18) / .62).clamp(0.0, 1.0));
+
   @override
   void paint(Canvas canvas, Size size) {
-    final a = airportCoordinates[from];
-    final b = airportCoordinates[to];
+    final a = airportCoordinates[from.code];
+    final b = airportCoordinates[to.code];
     canvas.drawRect(
       Offset.zero & size,
-      Paint()..color = const Color(0xFF070A10),
+      Paint()..color = const Color(0xFF05070C),
     );
+    _stars(canvas, size);
     if (a == null || b == null) return;
 
-    // Equirectangular projection fitted to the route with generous margins.
-    final minLat = math.min(a.$1, b.$1), maxLat = math.max(a.$1, b.$1);
-    final minLon = math.min(a.$2, b.$2), maxLon = math.max(a.$2, b.$2);
-    final spanLat = math.max(maxLat - minLat, 3.0) * 1.8;
-    final spanLon = math.max(maxLon - minLon, 3.0) * 1.8;
-    final cLat = (minLat + maxLat) / 2, cLon = (minLon + maxLon) / 2;
-    final k = math.min(size.width / spanLon, size.height * .8 / spanLat);
-    Offset project((double, double) p) => Offset(
-      size.width / 2 + (p.$2 - cLon) * k,
-      size.height * .45 - (p.$1 - cLat) * k,
+    final fly = flyProgress(progress);
+    final plane = _slerp(a, b, fly);
+    final start = _slerp(a, b, 0);
+    final end = _slerp(a, b, 1);
+
+    // Camera.
+    final routeArc = math.acos(
+      (_vec(a).$1 * _vec(b).$1 +
+              _vec(a).$2 * _vec(b).$2 +
+              _vec(a).$3 * _vec(b).$3)
+          .clamp(-1.0, 1.0),
     );
-
-    final start = project(a), end = project(b);
-    final mid = Offset.lerp(start, end, .5)!;
-    final normal = Offset(-(end - start).dy, (end - start).dx);
-    final control =
-        mid +
-        normal /
-            (normal.distance == 0 ? 1 : normal.distance) *
-            (end - start).distance *
-            .22;
-    final route = Path()
-      ..moveTo(start.dx, start.dy)
-      ..quadraticBezierTo(control.dx, control.dy, end.dx, end.dy);
-    final metric = route.computeMetrics().first;
-    final fly = Curves.easeInOutSine.transform(progress);
-    final tangent = metric.getTangentForOffset(metric.length * fly)!;
-
-    // Camera: follow the plane, then zoom toward the destination.
-    final dive = Curves.easeIn.transform(
-      ((progress - .75) / .25).clamp(0.0, 1.0),
+    final minDim = math.min(size.width, size.height);
+    final globeR = minDim * .40;
+    final routeR = (size.width * .55 / math.max(routeArc, .02)).clamp(
+      globeR,
+      minDim * 9,
     );
-    final zoom = 1.25 + dive * 1.6;
-    final focus = Offset.lerp(tangent.position, end, dive)!;
-    canvas.save();
-    canvas.translate(size.width / 2, size.height * .45);
-    canvas.scale(zoom);
-    canvas.translate(-focus.dx, -focus.dy);
-
-    // Graticule.
-    final grid = Paint()
-      ..color = Colors.white.withValues(alpha: .05)
-      ..strokeWidth = 1 / zoom;
-    for (var lat = -10; lat <= 50; lat += 2) {
-      final y = project((lat.toDouble(), 0)).dy;
-      canvas.drawLine(Offset(-4000, y), Offset(4000, y), grid);
-    }
-    for (var lon = 80; lon <= 150; lon += 2) {
-      final x = project((0, lon.toDouble())).dx;
-      canvas.drawLine(Offset(x, -4000), Offset(x, 4000), grid);
-    }
-
-    // Ambient towns: faint, deterministic scatter so the night map isn't empty.
-    final rng = math.Random(7);
-    final town = Paint()..color = const Color(0xFFFFE2A8).withValues(alpha: .28);
-    final glow = Paint()
-      ..color = const Color(0xFFFFC870).withValues(alpha: .10)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-    for (var i = 0; i < 320; i++) {
-      // Clustered around the route, like towns seen from cruise altitude.
-      final p = project((
-        cLat + (rng.nextDouble() - .5) * spanLat * 1.4,
-        cLon + (rng.nextDouble() - .5) * spanLon * 1.4,
-      ));
-      final r = (.7 + rng.nextDouble() * 1.6) / zoom;
-      if (i % 9 == 0) canvas.drawCircle(p, r * 4, glow);
-      canvas.drawCircle(p, r, town);
+    final zoomIn = Curves.easeInOutCubic.transform(
+      (progress / .2).clamp(0.0, 1.0),
+    );
+    final dive = Curves.easeInCubic.transform(
+      ((progress - .82) / .18).clamp(0.0, 1.0),
+    );
+    final radius = (globeR + (routeR - globeR) * zoomIn) * (1 + dive * 2.2);
+    final followT = Curves.easeInOut.transform((progress / .2).clamp(0.0, 1.0));
+    double lerpAngle(double x, double y, double t) {
+      var d = y - x;
+      while (d > math.pi) {
+        d -= 2 * math.pi;
+      }
+      while (d < -math.pi) {
+        d += 2 * math.pi;
+      }
+      return x + d * t;
     }
 
-    // Airports as city lights.
-    for (final entry in airportCoordinates.entries) {
-      final p = project(entry.value);
-      final isEnd = entry.key == from || entry.key == to;
+    final camLat = lerpAngle(start.$1, plane.$1, followT);
+    final camLon = lerpAngle(start.$2, plane.$2, followT);
+    final viewLat = lerpAngle(camLat, end.$1, dive);
+    final viewLon = lerpAngle(camLon, end.$2, dive);
+    final center = Offset(size.width / 2, size.height * .45);
+
+    // Globe surface (shader) or a plain disc while assets load.
+    final g = assets;
+    if (g != null) {
+      final shader = g.program.fragmentShader()
+        ..setFloat(0, center.dx)
+        ..setFloat(1, center.dy)
+        ..setFloat(2, radius)
+        ..setFloat(3, viewLat)
+        ..setFloat(4, viewLon)
+        ..setImageSampler(0, g.earth);
+      canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
+    } else {
       canvas.drawCircle(
-        p,
-        (isEnd ? 9 : 5) / zoom,
-        Paint()
-          ..color = const Color(0xFF7FA6FF).withValues(alpha: isEnd ? .35 : .12)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        center,
+        radius,
+        Paint()..color = const Color(0xFF10233F),
       );
-      canvas.drawCircle(
-        p,
-        (isEnd ? 3.2 : 1.6) / zoom,
-        Paint()..color = Colors.white.withValues(alpha: isEnd ? .95 : .45),
-      );
-      if (isEnd) {
-        final tp = TextPainter(
-          text: TextSpan(
-            text: entry.key,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 13 / zoom,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        tp.paint(canvas, p + Offset(8 / zoom, -tp.height - 4 / zoom));
+    }
+
+    // Orthographic projection matching the shader.
+    Offset? project((double, double) p) {
+      final lat = p.$1, dLon = p.$2 - viewLon;
+      final cosC =
+          math.sin(viewLat) * math.sin(lat) +
+          math.cos(viewLat) * math.cos(lat) * math.cos(dLon);
+      if (cosC < 0) return null; // far side
+      final x = math.cos(lat) * math.sin(dLon);
+      final y =
+          math.cos(viewLat) * math.sin(lat) -
+          math.sin(viewLat) * math.cos(lat) * math.cos(dLon);
+      return center + Offset(x, -y) * radius;
+    }
+
+    // Route: solid behind the plane, dashed ahead.
+    const steps = 96;
+    final behind = Path();
+    final ahead = <Offset>[];
+    var started = false;
+    for (var i = 0; i <= steps; i++) {
+      final f = i / steps;
+      final pt = project(_slerp(a, b, f));
+      if (pt == null) continue;
+      if (f <= fly) {
+        if (!started) {
+          behind.moveTo(pt.dx, pt.dy);
+          started = true;
+        } else {
+          behind.lineTo(pt.dx, pt.dy);
+        }
+      } else {
+        ahead.add(pt);
       }
     }
-
-    // Route: dashed ahead, solid behind the plane.
-    final ahead = Paint()
-      ..color = Colors.white.withValues(alpha: .25)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6 / zoom;
-    for (var d = metric.length * fly; d < metric.length; d += 10 / zoom) {
-      canvas.drawPath(metric.extractPath(d, d + 5 / zoom), ahead);
+    final dash = Paint()
+      ..color = Colors.white.withValues(alpha: .7)
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i + 1 < ahead.length; i += 2) {
+      canvas.drawLine(ahead[i], ahead[i + 1], dash);
     }
     canvas.drawPath(
-      metric.extractPath(0, metric.length * fly),
+      behind,
       Paint()
-        ..color = const Color(0xFF7FA6FF)
+        ..color = const Color(0xFF8FB4FF)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.4 / zoom
+        ..strokeWidth = 3
         ..strokeCap = StrokeCap.round,
     );
 
+    // Airports with real names.
+    for (final (airport, coord) in [(from, a), (to, b)]) {
+      final pt = project((coord.$1 * math.pi / 180, coord.$2 * math.pi / 180));
+      if (pt == null) continue;
+      canvas.drawCircle(
+        pt,
+        10,
+        Paint()..color = Colors.white.withValues(alpha: .25),
+      );
+      canvas.drawCircle(pt, 4.5, Paint()..color = Colors.white);
+      final name = lang == 'th' ? airport.cityTh : airport.cityEn;
+      final tp = TextPainter(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: airport.code,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            TextSpan(
+              text: '  $name',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .85),
+                fontSize: 12,
+              ),
+            ),
+          ],
+          style: const TextStyle(
+            shadows: [Shadow(color: Colors.black, blurRadius: 6)],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, pt + Offset(10, -tp.height - 6));
+    }
+
     // Plane, nose along the route.
-    canvas.save();
-    canvas.translate(tangent.position.dx, tangent.position.dy);
-    canvas.rotate(-tangent.angle + math.pi / 2);
-    final tp = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(_plane.codePoint),
-        style: TextStyle(
-          fontFamily: _plane.fontFamily,
-          package: _plane.fontPackage,
-          fontSize: 30 / zoom,
-          color: Colors.white,
-          shadows: const [Shadow(color: Color(0xAA7FA6FF), blurRadius: 12)],
+    final here = project(plane);
+    final next = project(_slerp(a, b, math.min(1, fly + .01)));
+    if (here != null) {
+      final heading = next == null || (next - here).distance < .01
+          ? 0.0
+          : math.atan2((next - here).dy, (next - here).dx) + math.pi / 2;
+      canvas.save();
+      canvas.translate(here.dx, here.dy);
+      canvas.rotate(heading);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(_plane.codePoint),
+          style: TextStyle(
+            fontFamily: _plane.fontFamily,
+            package: _plane.fontPackage,
+            fontSize: 34,
+            color: Colors.white,
+            shadows: const [Shadow(color: Colors.black87, blurRadius: 10)],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
-    canvas.restore();
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+      canvas.restore();
+    }
+  }
 
-    canvas.restore();
-
-    // Vignette.
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()
-        ..shader = ui.Gradient.radial(
-          Offset(size.width / 2, size.height * .45),
-          size.longestSide * .7,
-          [Colors.transparent, const Color(0xFF070A10)],
-          [.55, 1],
-        ),
-    );
+  void _stars(Canvas canvas, Size size) {
+    final rng = math.Random(11);
+    final star = Paint();
+    for (var i = 0; i < 160; i++) {
+      star.color = Colors.white.withValues(alpha: .15 + rng.nextDouble() * .5);
+      canvas.drawCircle(
+        Offset(rng.nextDouble() * size.width, rng.nextDouble() * size.height),
+        rng.nextDouble() * 1.1 + .2,
+        star,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _RouteMapPainter old) =>
-      old.progress != progress || old.from != from || old.to != to;
+  bool shouldRepaint(covariant _GlobePainter old) =>
+      old.progress != progress || old.assets != assets || old.lang != lang;
+}
+
+/// Street map of the real destination airport (OpenStreetMap), slowly
+/// zooming in like the final approach.
+class _DestinationMap extends StatelessWidget {
+  const _DestinationMap({
+    required this.airport,
+    required this.at,
+    required this.progress,
+    required this.lang,
+  });
+
+  final AirportEntity airport;
+  final (double, double) at;
+  final double progress;
+  final String lang;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final point = LatLng(at.$1, at.$2);
+    final city = lang == 'th' ? airport.cityTh : airport.cityEn;
+    final name = lang == 'th' ? airport.nameTh : airport.nameEn;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Transform.scale(
+          scale: 1 + Curves.easeOut.transform(progress) * .35,
+          child: FlutterMap(
+            options: MapOptions(
+              initialCenter: point,
+              initialZoom: 12.5,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.none,
+              ),
+              backgroundColor: const Color(0xFFE8ECEF),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.mini_projects',
+              ),
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: point,
+                    width: 56,
+                    height: 56,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E5BD6),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black38, blurRadius: 10),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.flight_land_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 56,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
+                color: Colors.white.withValues(alpha: .78),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      trArgs(lang, 'welcome_to', {'city': city}),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      '$name (${airport.code})',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 8,
+          bottom: 8,
+          child: Text(
+            '© OpenStreetMap contributors',
+            style: TextStyle(
+              color: Colors.black.withValues(alpha: .6),
+              fontSize: 10,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

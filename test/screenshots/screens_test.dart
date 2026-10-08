@@ -86,6 +86,12 @@ void main() {
   late FlightEntity flight;
 
   setUpAll(() async {
+    // flutter_map's tile cache asks path_provider for a folder.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => Directory.systemTemp.path,
+    );
     const fonts = 'C:/Windows/Fonts';
     final flutterRoot = Platform.environment['FLUTTER_ROOT'] ?? 'C:/src/flutter';
     await _loadFont('Roboto', ['$fonts/LeelawUI.ttf', '$fonts/LeelaUIb.ttf']);
@@ -126,6 +132,8 @@ void main() {
         await prepare?.call();
       });
       final languages = LanguageProvider();
+      // Fresh widget state for each theme (no carry-over between runs).
+      await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(
         MultiProvider(
           providers: [
@@ -230,30 +238,75 @@ void main() {
           next: const Scaffold(body: Center(child: Text('next'))),
         ),
       ));
-  testWidgets('takeoff_route', (t) => shoot(
+  testWidgets('globe_intro', (t) => shoot(
         t,
-        'takeoff_route',
+        'globe_intro',
         () => TakeoffScreen(
           flight: flight,
           seats: const ['4C'],
           next: const Scaffold(body: Center(child: Text('next'))),
         ),
         act: (t) async {
-          for (var i = 0; i < 22; i++) {
+          await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 600)));
+          await t.pump(const Duration(milliseconds: 300));
+        },
+      ));
+  testWidgets('globe_start', (t) => shoot(
+        t,
+        'globe_start',
+        () => TakeoffScreen(
+          flight: flight,
+          seats: const ['4C'],
+          next: const Scaffold(body: Center(child: Text('next'))),
+        ),
+        act: (t) async {
+          await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 600)));
+          for (var i = 0; i < 16; i++) {
             await t.pump(const Duration(milliseconds: 100));
           }
         },
       ));
-  testWidgets('takeoff_dive', (t) => shoot(
+  testWidgets('globe_mid', (t) => shoot(
         t,
-        'takeoff_dive',
+        'globe_mid',
         () => TakeoffScreen(
           flight: flight,
           seats: const ['4C'],
           next: const Scaffold(body: Center(child: Text('next'))),
         ),
         act: (t) async {
-          for (var i = 0; i < 37; i++) {
+          await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 600)));
+          for (var i = 0; i < 36; i++) {
+            await t.pump(const Duration(milliseconds: 100));
+          }
+        },
+      ));
+  testWidgets('globe_dive', (t) => shoot(
+        t,
+        'globe_dive',
+        () => TakeoffScreen(
+          flight: flight,
+          seats: const ['4C'],
+          next: const Scaffold(body: Center(child: Text('next'))),
+        ),
+        act: (t) async {
+          await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 600)));
+          for (var i = 0; i < 53; i++) {
+            await t.pump(const Duration(milliseconds: 100));
+          }
+        },
+      ));
+  testWidgets('dest_map', (t) => shoot(
+        t,
+        'dest_map',
+        () => TakeoffScreen(
+          flight: flight,
+          seats: const ['4C'],
+          next: const Scaffold(body: Center(child: Text('next'))),
+        ),
+        act: (t) async {
+          await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 600)));
+          for (var i = 0; i < 68; i++) {
             await t.pump(const Duration(milliseconds: 100));
           }
         },
