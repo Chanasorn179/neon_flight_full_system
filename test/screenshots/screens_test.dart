@@ -29,6 +29,7 @@ import 'package:mini_projects/screens/auth/login_screen.dart';
 import 'package:mini_projects/screens/booking/booking_history_screen.dart';
 import 'package:mini_projects/screens/booking/payment_screen.dart';
 import 'package:mini_projects/screens/booking/seat_selection_screen.dart';
+import 'package:mini_projects/screens/booking/takeoff_screen.dart';
 import 'package:mini_projects/screens/booking/ticket_screen.dart';
 import 'package:mini_projects/screens/flights/flight_results_screen.dart';
 import 'package:mini_projects/screens/home/main_shell.dart';
@@ -218,6 +219,43 @@ void main() {
         act: (t) async {
           await t.tap(find.bySemanticsLabel('Seat 6C'));
           await t.pump(const Duration(milliseconds: 300));
+        },
+      ));
+  testWidgets('takeoff_pass', (t) => shoot(
+        t,
+        'takeoff_pass',
+        () => TakeoffScreen(
+          flight: flight,
+          seats: const ['4C'],
+          next: const Scaffold(body: Center(child: Text('next'))),
+        ),
+      ));
+  testWidgets('takeoff_route', (t) => shoot(
+        t,
+        'takeoff_route',
+        () => TakeoffScreen(
+          flight: flight,
+          seats: const ['4C'],
+          next: const Scaffold(body: Center(child: Text('next'))),
+        ),
+        act: (t) async {
+          for (var i = 0; i < 22; i++) {
+            await t.pump(const Duration(milliseconds: 100));
+          }
+        },
+      ));
+  testWidgets('takeoff_dive', (t) => shoot(
+        t,
+        'takeoff_dive',
+        () => TakeoffScreen(
+          flight: flight,
+          seats: const ['4C'],
+          next: const Scaffold(body: Center(child: Text('next'))),
+        ),
+        act: (t) async {
+          for (var i = 0; i < 37; i++) {
+            await t.pump(const Duration(milliseconds: 100));
+          }
         },
       ));
   testWidgets('seats_business', (t) => shoot(
