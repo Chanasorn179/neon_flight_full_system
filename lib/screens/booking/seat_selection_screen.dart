@@ -205,7 +205,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                       Expanded(
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 260),
-                          child: _TiltedFuselage(
+                          child: _GlassFuselage(
                             lang: lang,
                             child: _CabinMap(
                               layout: layout,
@@ -412,10 +412,9 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// Glass fuselage seen from above at an angle: the nose recedes into the
-/// distance, like looking down the cabin.
-class _TiltedFuselage extends StatelessWidget {
-  const _TiltedFuselage({required this.lang, required this.child});
+/// Glass fuselage seen straight from above, with the cockpit at the top.
+class _GlassFuselage extends StatelessWidget {
+  const _GlassFuselage({required this.lang, required this.child});
 
   final String lang;
   final Widget child;
@@ -423,72 +422,66 @@ class _TiltedFuselage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Transform(
-      alignment: Alignment.topCenter,
-      transform: Matrix4.identity()
-        ..setEntry(3, 2, .0007)
-        ..rotateX(.28),
-      child: LayoutBuilder(
-        builder: (context, box) {
-          final nose = box.maxWidth * .42;
-          return Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.white.withValues(alpha: .10),
-                  Colors.white.withValues(alpha: .04),
-                ],
-              ),
-              borderRadius: BorderRadius.vertical(
-                top: Radius.elliptical(box.maxWidth / 2, nose),
-                bottom: const Radius.circular(28),
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: .14)),
+    return LayoutBuilder(
+      builder: (context, box) {
+        final nose = box.maxWidth * .42;
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white.withValues(alpha: .10),
+                Colors.white.withValues(alpha: .04),
+              ],
             ),
-            padding: EdgeInsets.fromLTRB(12, nose * .45, 12, 22),
-            child: Column(
-              children: [
-                // Cockpit windscreen.
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (final tilt in [-.22, -.07, .07, .22])
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 3),
-                        child: Transform.rotate(
-                          angle: tilt,
-                          child: Container(
-                            width: 24,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: .55),
-                              borderRadius: BorderRadius.circular(5),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: .12),
-                              ),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.elliptical(box.maxWidth / 2, nose),
+              bottom: const Radius.circular(28),
+            ),
+            border: Border.all(color: Colors.white.withValues(alpha: .14)),
+          ),
+          padding: EdgeInsets.fromLTRB(12, nose * .45, 12, 22),
+          child: Column(
+            children: [
+              // Cockpit windscreen.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (final tilt in [-.22, -.07, .07, .22])
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: Transform.rotate(
+                        angle: tilt,
+                        child: Container(
+                          width: 24,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: .55),
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: .12),
                             ),
                           ),
                         ),
                       ),
-                  ],
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                tr(lang, 'front'),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: _Focus.muted,
+                  letterSpacing: 1.2,
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  tr(lang, 'front'),
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: _Focus.muted,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                SizedBox(height: nose * .18),
-                child,
-              ],
-            ),
-          );
-        },
-      ),
+              ),
+              SizedBox(height: nose * .18),
+              child,
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -659,10 +652,7 @@ class _Seat extends StatelessWidget {
 
 /// Frosted panel that floats over the map.
 class _Glass extends StatelessWidget {
-  const _Glass({
-    required this.child,
-    this.padding = const EdgeInsets.all(16),
-  });
+  const _Glass({required this.child, this.padding = const EdgeInsets.all(16)});
 
   final Widget child;
   final EdgeInsets padding;
