@@ -201,6 +201,7 @@ class BookingEntity {
     required this.createdAt,
     this.paymentStatus = PaymentStatus.pending,
     this.tripId,
+    this.paymentLabel,
   });
   final String id;
   final String userId;
@@ -216,6 +217,9 @@ class BookingEntity {
 
   /// Shared by the outbound and return bookings of a round trip.
   final String? tripId;
+
+  /// Saved method used, e.g. "Visa •••• 1234" (display only).
+  final String? paymentLabel;
 
   bool get isPaid => paymentStatus == PaymentStatus.paid;
 
@@ -241,6 +245,7 @@ class BookingEntity {
         createdAt: createdAt,
         paymentStatus: paymentStatus ?? this.paymentStatus,
         tripId: tripId,
+        paymentLabel: paymentLabel,
       );
 }
 
@@ -313,17 +318,39 @@ class SavedPaymentMethodEntity {
     required this.type,
     required this.label,
     required this.detail,
+    this.isDefault = false,
   });
   final String id;
   final SavedPaymentType type;
+
+  /// Card brand, "PromptPay" or "Mobile Banking".
   final String label;
+
+  /// Card: "•••• 1234 · 12/28"; bank: "Kasikornbank (K PLUS)".
   final String detail;
+  final bool isDefault;
+
+  /// Short text for a booking/receipt, e.g. "Visa •••• 1234".
+  String get summary => switch (type) {
+        SavedPaymentType.promptPay => 'PromptPay',
+        SavedPaymentType.card => '$label ${detail.split(' · ').first}'.trim(),
+        SavedPaymentType.mobileBanking => detail,
+      };
+
+  SavedPaymentMethodEntity copyWith({bool? isDefault}) => SavedPaymentMethodEntity(
+        id: id,
+        type: type,
+        label: label,
+        detail: detail,
+        isDefault: isDefault ?? this.isDefault,
+      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'type': type.name,
         'label': label,
         'detail': detail,
+        'isDefault': isDefault,
       };
 
   factory SavedPaymentMethodEntity.fromJson(Map<String, dynamic> json) => SavedPaymentMethodEntity(
@@ -334,5 +361,6 @@ class SavedPaymentMethodEntity {
         ),
         label: json['label']?.toString() ?? '',
         detail: json['detail']?.toString() ?? '',
+        isDefault: json['isDefault'] == true,
       );
 }

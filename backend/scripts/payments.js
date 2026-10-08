@@ -74,6 +74,7 @@ function summarize(b) {
     ),
     total: Number(b.fare?.total ?? 0),
     paymentMethod: text(b.paymentMethod),
+    paymentLabel: b.paymentLabel ? text(b.paymentLabel) : null,
     paymentStatus: text(b.paymentStatus, 'paid'),
     status: text(b.status, 'upcoming'),
   };

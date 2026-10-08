@@ -232,7 +232,7 @@
       ...legs.map(legView),
       el('div', { className: 'people' }, `ผู้โดยสาร: ${first.passengers.join(', ') || '-'}`),
       el('div', { className: 'total' },
-        el('span', { className: 'meta' }, methodName[first.paymentMethod] || first.paymentMethod),
+        el('span', { className: 'meta' }, first.paymentLabel || methodName[first.paymentMethod] || first.paymentMethod),
         el('b', {}, baht(total))));
 
     if (status === 'pending') {

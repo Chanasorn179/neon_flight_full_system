@@ -162,6 +162,17 @@ test('a seat lock cannot be deleted while its booking is active', async () => {
   await assertFails(deleteDoc(doc(alice(), 'seatLocks/FD385_20261120_12C')));
 });
 
+test('saved payment methods: display fields only, isDefault must be a bool', async () => {
+  const path = 'users/alice/paymentMethods/card-1';
+  const card = { id: 'card-1', type: 'card', label: 'Visa', detail: '•••• 4242 · 12/29' };
+  await assertSucceeds(setDoc(doc(alice(), path), { ...card, isDefault: true }));
+  await assertFails(setDoc(doc(alice(), path), { ...card, isDefault: 'yes' }));
+  await assertFails(setDoc(doc(alice(), path), { ...card, detail: '4242424242424242' }));
+  await assertFails(setDoc(doc(alice(), path), { ...card, cvv: '123' }));
+  const bob = env.authenticatedContext('bob').firestore();
+  await assertFails(setDoc(doc(bob, path), card));
+});
+
 test('user reads only their own bookings', async () => {
   await seed('bookings/NF1', booking());
   await seed('bookings/NF2', booking({ id: 'NF2', userId: 'bob' }));

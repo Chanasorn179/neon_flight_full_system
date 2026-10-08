@@ -32,6 +32,7 @@ import 'package:mini_projects/screens/booking/seat_selection_screen.dart';
 import 'package:mini_projects/screens/booking/ticket_screen.dart';
 import 'package:mini_projects/screens/flights/flight_results_screen.dart';
 import 'package:mini_projects/screens/home/main_shell.dart';
+import 'package:mini_projects/screens/profile/payment_methods_screen.dart';
 import 'package:mini_projects/screens/profile/profile_screen.dart';
 import 'package:mini_projects/widgets/notification_bell.dart';
 import 'package:provider/provider.dart';
@@ -80,6 +81,7 @@ void main() {
   late AuthProvider auth;
   late FlightProvider flights;
   late BookingProvider bookings;
+  late PaymentMethodsProvider methods;
   late FlightEntity flight;
 
   setUpAll(() async {
@@ -98,6 +100,7 @@ void main() {
     auth = AuthProvider(MockAuthRepository(api));
     flights = FlightProvider(MockFlightRepository(api));
     bookings = BookingProvider(MockBookingRepository(api));
+    methods = PaymentMethodsProvider();
     flight = (await api.searchFlights('BKK', 'CNX', DateTime(2026, 11, 20)))[1];
   });
 
@@ -130,7 +133,7 @@ void main() {
             ChangeNotifierProvider.value(value: auth),
             ChangeNotifierProvider.value(value: flights),
             ChangeNotifierProvider.value(value: bookings),
-            ChangeNotifierProvider(create: (_) => PaymentMethodsProvider()),
+            ChangeNotifierProvider.value(value: methods),
             ChangeNotifierProvider(create: (_) => ThemeProvider()),
           ],
           child: MaterialApp(
@@ -201,6 +204,20 @@ void main() {
         act: (t) async {
           await t.tap(find.bySemanticsLabel('Seat 4C'));
           await t.tap(find.bySemanticsLabel('Seat 4D'));
+        },
+      ));
+  testWidgets('seats_takeoff', (t) => shoot(
+        t,
+        'seats_takeoff',
+        () => SeatSelectionScreen(
+          flight: flight,
+          cabinClass: CabinClass.economy,
+          passengers: [passenger],
+        ),
+        // Light run selects the seat (plays the take-off); dark run deselects.
+        act: (t) async {
+          await t.tap(find.bySemanticsLabel('Seat 6C'));
+          await t.pump(const Duration(milliseconds: 300));
         },
       ));
   testWidgets('seats_business', (t) => shoot(
@@ -284,6 +301,66 @@ void main() {
           ]);
         },
         act: (t) async => t.tap(find.byType(NotificationBell)),
+      ));
+
+  Future<void> seedMethods() async {
+    if (methods.methods.length > 1) return;
+    await methods.load(auth.currentUser!.id);
+    await methods.add(
+      const SavedPaymentMethodEntity(
+        id: 'card-visa',
+        type: SavedPaymentType.card,
+        label: 'Visa',
+        detail: '•••• 4242 · 12/29',
+      ),
+      makeDefault: true,
+    );
+    await methods.add(const SavedPaymentMethodEntity(
+      id: 'card-jcb',
+      type: SavedPaymentType.card,
+      label: 'JCB',
+      detail: '•••• 0518 · 03/28',
+    ));
+    await methods.add(const SavedPaymentMethodEntity(
+      id: 'bank-kbank',
+      type: SavedPaymentType.mobileBanking,
+      label: 'Mobile Banking',
+      detail: 'Kasikornbank (K PLUS)',
+    ));
+  }
+
+  testWidgets('payment_methods', (t) => shoot(
+        t,
+        'payment_methods',
+        () => const PaymentMethodsScreen(),
+        prepare: seedMethods,
+      ));
+  testWidgets('add_card', (t) => shoot(
+        t,
+        'add_card',
+        () => const PaymentMethodsScreen(),
+        prepare: seedMethods,
+        act: (t) async {
+          if (find.byType(AddPaymentMethodSheet).evaluate().isEmpty) {
+            await t.tap(find.byType(FloatingActionButton));
+            await t.pumpAndSettle();
+            await t.tap(find.text('Mastercard'));
+            final fields = find.byType(TextFormField);
+            await t.enterText(fields.at(0), '7788');
+            await t.enterText(fields.at(1), '1130');
+          }
+        },
+      ));
+  testWidgets('payment_saved', (t) => shoot(
+        t,
+        'payment_saved',
+        () => PaymentScreen(
+          flight: flight,
+          cabinClass: CabinClass.economy,
+          passengers: [passenger],
+          seats: const ['12C'],
+        ),
+        prepare: seedMethods,
       ));
   testWidgets('profile', (t) => shoot(t, 'profile', () => const Scaffold(body: ProfileScreen())));
 }

@@ -31,6 +31,7 @@ service cloud.firestore {
             'type',
             'label',
             'detail',
+            'isDefault',
             'updatedAt'
           ])
           && request.resource.data.id == methodId
@@ -43,6 +44,7 @@ service cloud.firestore {
           && request.resource.data.detail is string
           && request.resource.data.label.size() <= 40
           && request.resource.data.detail.size() <= 60
+          && (!('isDefault' in request.resource.data) || request.resource.data.isDefault is bool)
           && (
             request.resource.data.type != 'promptPay'
             || request.resource.data.detail == 'สแกน QR เพื่อชำระเงิน'

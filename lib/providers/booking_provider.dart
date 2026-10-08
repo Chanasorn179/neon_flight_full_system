@@ -88,6 +88,7 @@ class BookingProvider extends ChangeNotifier {
     required PaymentMethod paymentMethod,
     FlightEntity? returnFlight,
     List<String> returnSeats = const [],
+    String? paymentLabel,
   }) async {
     final id =
         'NF${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
@@ -106,6 +107,7 @@ class BookingProvider extends ChangeNotifier {
           status: BookingStatus.upcoming,
           createdAt: now,
           tripId: returnFlight == null ? null : id,
+          paymentLabel: paymentLabel,
         );
 
     final created = await repository.createAll([

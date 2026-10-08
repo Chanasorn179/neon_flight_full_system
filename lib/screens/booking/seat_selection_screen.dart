@@ -38,10 +38,25 @@ class SeatSelectionScreen extends StatefulWidget {
   State<SeatSelectionScreen> createState() => _SeatSelectionScreenState();
 }
 
-class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
+class _SeatSelectionScreenState extends State<SeatSelectionScreen>
+    with SingleTickerProviderStateMixin {
+  /// Plays the "plane takes off" flourish when the last seat is chosen.
+  late final AnimationController _takeoff = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1300),
+  );
+
+  @override
+  void dispose() {
+    _takeoff.dispose();
+    super.dispose();
+  }
+
   /// Seat chosen for each passenger, in passenger order (null = not yet).
-  late final List<String?> assigned =
-      List<String?>.filled(widget.passengers.length, null);
+  late final List<String?> assigned = List<String?>.filled(
+    widget.passengers.length,
+    null,
+  );
 
   /// Passenger whose seat the next tap sets.
   int active = 0;
@@ -57,10 +72,9 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
   Future<void> _loadTakenSeats() async {
     try {
-      final seats = await context
-          .read<BookingProvider>()
-          .repository
-          .takenSeats(widget.flight);
+      final seats = await context.read<BookingProvider>().repository.takenSeats(
+        widget.flight,
+      );
       if (!mounted) return;
       setState(() {
         taken = seats;
@@ -77,29 +91,11 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
   /// Pre-booked seats so the demo cabin never looks empty.
   Set<String> get _demoOccupied => switch (widget.cabinClass) {
-        CabinClass.economy => {
-            '1B',
-            '2D',
-            '3C',
-            '5A',
-            '6F',
-            '8E',
-            '9B',
-          },
-        CabinClass.premiumEconomy => {
-            '1C',
-            '2F',
-            '4A',
-            '5E',
-          },
-        CabinClass.business => {
-            '1D',
-            '3A',
-          },
-        CabinClass.first => {
-            '2F',
-          },
-      };
+    CabinClass.economy => {'1B', '2D', '3C', '5A', '6F', '8E', '9B'},
+    CabinClass.premiumEconomy => {'1C', '2F', '4A', '5E'},
+    CabinClass.business => {'1D', '3A'},
+    CabinClass.first => {'2F'},
+  };
 
   int get requiredSeats => widget.passengers.length;
   bool get canContinue =>
@@ -108,9 +104,9 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
       assigned.whereType<String>().length * widget.cabinClass.seatFee;
 
   Map<String, int> get _seatOwner => {
-        for (var i = 0; i < assigned.length; i++)
-          if (assigned[i] != null) assigned[i]!: i,
-      };
+    for (var i = 0; i < assigned.length; i++)
+      if (assigned[i] != null) assigned[i]!: i,
+  };
 
   /// Tapping a free seat gives it to the active passenger (moving them if they
   /// already had one) and moves on to the next passenger without a seat.
@@ -119,6 +115,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     if (unavailable.contains(id)) return;
 
     HapticFeedback.selectionClick();
+    final wasComplete = canContinue;
 
     setState(() {
       final owner = assigned.indexOf(id);
@@ -131,6 +128,15 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
       final next = assigned.indexWhere((seat) => seat == null);
       if (next != -1) active = next;
     });
+
+    // Celebrate only the moment the selection becomes complete, and skip it
+    // when the user asked the system to reduce motion.
+    if (!wasComplete &&
+        canContinue &&
+        !MediaQuery.disableAnimationsOf(context)) {
+      HapticFeedback.mediumImpact();
+      _takeoff.forward(from: 0);
+    }
   }
 
   Future<void> _continueToPayment() async {
@@ -198,54 +204,153 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
           ),
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-              children: [
-                _FlightHeaderCard(
-                  flight: widget.flight,
-                  cabinClass: widget.cabinClass,
-                  layout: layout,
-                  lang: lang,
-                  palette: palette,
-                  legLabel: widget.returnFlight != null
-                      ? tr(lang, 'outbound_flight')
-                      : widget.outbound != null
+          Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                  children: [
+                    _FlightHeaderCard(
+                      flight: widget.flight,
+                      cabinClass: widget.cabinClass,
+                      layout: layout,
+                      lang: lang,
+                      palette: palette,
+                      legLabel: widget.returnFlight != null
+                          ? tr(lang, 'outbound_flight')
+                          : widget.outbound != null
                           ? tr(lang, 'return_flight')
                           : null,
+                    ),
+                    const SizedBox(height: 14),
+                    _SeatLegend(palette: palette, lang: lang),
+                    const SizedBox(height: 14),
+                    _Fuselage(
+                      lang: lang,
+                      palette: palette,
+                      child: _CabinMap(
+                        layout: layout,
+                        seatOwner: _seatOwner,
+                        unavailable: unavailable,
+                        showPassengerNumbers: requiredSeats > 1,
+                        onSeat: _tapSeat,
+                        palette: palette,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 14),
-                _SeatLegend(palette: palette, lang: lang),
-                const SizedBox(height: 14),
-                _Fuselage(
-                  lang: lang,
-                  palette: palette,
-                  child: _CabinMap(
-                    layout: layout,
-                    seatOwner: _seatOwner,
-                    unavailable: unavailable,
-                    showPassengerNumbers: requiredSeats > 1,
-                    onSeat: _tapSeat,
-                    palette: palette,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              _BottomSummary(
+                passengers: widget.passengers,
+                assigned: assigned,
+                active: active,
+                onPassenger: (i) => setState(() => active = i),
+                seatTotal: seatTotal,
+                canContinue: canContinue,
+                palette: palette,
+                lang: lang,
+                onContinue: _continueToPayment,
+              ),
+            ],
           ),
-          _BottomSummary(
-            passengers: widget.passengers,
-            assigned: assigned,
-            active: active,
-            onPassenger: (i) => setState(() => active = i),
-            seatTotal: seatTotal,
-            canContinue: canContinue,
-            palette: palette,
-            lang: lang,
-            onContinue: _continueToPayment,
+          Positioned.fill(
+            child: _TakeoffOverlay(animation: _takeoff, color: palette.accent),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A plane climbing from the bottom of the screen to the top with a fading
+/// contrail. Purely decorative: it ignores touches and hides from screen
+/// readers.
+class _TakeoffOverlay extends StatelessWidget {
+  const _TakeoffOverlay({required this.animation, required this.color});
+
+  final Animation<double> animation;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: AnimatedBuilder(
+          animation: animation,
+          builder: (context, _) {
+            final t = animation.value;
+            if (t == 0 || t == 1) return const SizedBox.shrink();
+            return LayoutBuilder(
+              builder: (context, box) {
+                const planeSize = 72.0;
+                const trail = 220.0;
+                final climb = Curves.easeInOutSine.transform(t);
+                // From below the bottom edge to above the top edge.
+                final y =
+                    box.maxHeight +
+                    planeSize -
+                    climb * (box.maxHeight + planeSize * 2 + trail);
+                // A gentle S-curve so it reads as flying, not sliding.
+                final sway = math.sin(t * math.pi * 2) * 26;
+                final x = box.maxWidth / 2 - planeSize / 2 + sway;
+                final tilt = math.cos(t * math.pi * 2) * .12;
+                final fade = t < .12
+                    ? t / .12
+                    : (t > .88 ? (1 - t) / .12 : 1.0);
+
+                return Opacity(
+                  opacity: fade.clamp(0.0, 1.0),
+                  child: Stack(
+                    children: [
+                      // Contrail.
+                      Positioned(
+                        left: x + planeSize / 2 - 3,
+                        top: y + planeSize * .7,
+                        child: Container(
+                          width: 6,
+                          height: trail,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(3),
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                color.withValues(alpha: .45),
+                                color.withValues(alpha: 0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: x,
+                        top: y,
+                        child: Transform.rotate(
+                          angle: tilt,
+                          child: Container(
+                            width: planeSize,
+                            height: planeSize,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: color.withValues(alpha: .14),
+                            ),
+                            child: Icon(
+                              Icons.flight_rounded,
+                              size: 52,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -315,7 +420,11 @@ class _FlightHeaderCard extends StatelessWidget {
                     ),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 6),
-                      child: Icon(Icons.arrow_forward_rounded, color: onHero, size: 18),
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        color: onHero,
+                        size: 18,
+                      ),
                     ),
                     Text(
                       flight.arrival.code,
@@ -434,9 +543,9 @@ class _LegendItem extends StatelessWidget {
         const SizedBox(width: 7),
         Text(
           text,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -509,8 +618,11 @@ class _Fuselage extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.keyboard_arrow_up_rounded,
-                      size: 18, color: colors.onSurfaceVariant),
+                  Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    size: 18,
+                    color: colors.onSurfaceVariant,
+                  ),
                   Text(
                     tr(lang, 'front'),
                     style: theme.textTheme.labelMedium?.copyWith(
@@ -656,7 +768,10 @@ class _SeatRow extends StatelessWidget {
 
     return Row(
       children: [
-        SizedBox(width: _windowGutter, child: Align(alignment: Alignment.centerLeft, child: window)),
+        SizedBox(
+          width: _windowGutter,
+          child: Align(alignment: Alignment.centerLeft, child: window),
+        ),
         for (int i = 0; i < layout.letters.length; i++) ...[
           Expanded(
             child: _Seat(
@@ -687,7 +802,10 @@ class _SeatRow extends StatelessWidget {
           else if (i != layout.letters.length - 1)
             SizedBox(width: layout.seatGap),
         ],
-        SizedBox(width: _windowGutter, child: Align(alignment: Alignment.centerRight, child: window)),
+        SizedBox(
+          width: _windowGutter,
+          child: Align(alignment: Alignment.centerRight, child: window),
+        ),
       ],
     );
   }
@@ -702,10 +820,10 @@ class _SeatLook {
   });
 
   factory _SeatLook.unavailable(ColorScheme colors) => _SeatLook(
-        fill: colors.surfaceContainerHighest,
-        border: colors.surfaceContainerHighest,
-        foreground: colors.onSurfaceVariant.withValues(alpha: .7),
-      );
+    fill: colors.surfaceContainerHighest,
+    border: colors.surfaceContainerHighest,
+    foreground: colors.onSurfaceVariant.withValues(alpha: .7),
+  );
 
   final Color fill;
   final Color border;
@@ -787,16 +905,16 @@ class _Seat extends StatelessWidget {
     final look = unavailable
         ? _SeatLook.unavailable(colors)
         : selected
-            ? _SeatLook(
-                fill: palette.accent,
-                border: palette.accent,
-                foreground: palette.onAccent,
-              )
-            : _SeatLook(
-                fill: colors.surfaceContainerLowest,
-                border: colors.outline.withValues(alpha: .55),
-                foreground: colors.onSurface,
-              );
+        ? _SeatLook(
+            fill: palette.accent,
+            border: palette.accent,
+            foreground: palette.onAccent,
+          )
+        : _SeatLook(
+            fill: colors.surfaceContainerLowest,
+            border: colors.outline.withValues(alpha: .55),
+            foreground: colors.onSurface,
+          );
 
     final Widget label;
     if (unavailable) {
@@ -939,7 +1057,9 @@ class _BottomSummary extends StatelessWidget {
                       Text(
                         canContinue
                             ? tr(lang, 'seats_done')
-                            : trArgs(lang, 'choose_seat_for', {'name': _name(active)}),
+                            : trArgs(lang, 'choose_seat_for', {
+                                'name': _name(active),
+                              }),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -992,8 +1112,9 @@ class _BottomSummary extends StatelessWidget {
                   backgroundColor: palette.accent,
                   foregroundColor: palette.onAccent,
                   disabledBackgroundColor: colors.surfaceContainerHighest,
-                  disabledForegroundColor:
-                      colors.onSurfaceVariant.withValues(alpha: .7),
+                  disabledForegroundColor: colors.onSurfaceVariant.withValues(
+                    alpha: .7,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
@@ -1062,13 +1183,17 @@ class _PassengerChip extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 12,
-                  backgroundColor: hasSeat ? palette.accent : colors.surfaceContainerHighest,
+                  backgroundColor: hasSeat
+                      ? palette.accent
+                      : colors.surfaceContainerHighest,
                   child: Text(
                     '$number',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
-                      color: hasSeat ? palette.onAccent : colors.onSurfaceVariant,
+                      color: hasSeat
+                          ? palette.onAccent
+                          : colors.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -1122,55 +1247,55 @@ class _CabinLayout {
   final double rowGap;
 
   static _CabinLayout forClass(CabinClass cabinClass) => switch (cabinClass) {
-        CabinClass.economy => const _CabinLayout(
-            letters: ['A', 'B', 'C', 'D', 'E', 'F'],
-            aisleAfter: {2},
-            rows: 10,
-            pattern: '3-3',
-            minMapWidth: 300,
-            seatHeight: 46,
-            seatRadius: 12,
-            aisleWidth: 30,
-            seatGap: 5,
-            rowGap: 8,
-          ),
-        CabinClass.premiumEconomy => const _CabinLayout(
-            letters: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
-            aisleAfter: {1, 4},
-            rows: 7,
-            pattern: '2-3-2',
-            minMapWidth: 320,
-            seatHeight: 50,
-            seatRadius: 13,
-            aisleWidth: 26,
-            seatGap: 4,
-            rowGap: 10,
-          ),
-        CabinClass.business => const _CabinLayout(
-            letters: ['A', 'C', 'D', 'F'],
-            aisleAfter: {1},
-            rows: 5,
-            pattern: '2-2',
-            minMapWidth: 280,
-            seatHeight: 62,
-            seatRadius: 16,
-            aisleWidth: 44,
-            seatGap: 8,
-            rowGap: 14,
-          ),
-        CabinClass.first => const _CabinLayout(
-            letters: ['A', 'F'],
-            aisleAfter: {0},
-            rows: 3,
-            pattern: '1-1',
-            minMapWidth: 260,
-            seatHeight: 80,
-            seatRadius: 20,
-            aisleWidth: 80,
-            seatGap: 8,
-            rowGap: 18,
-          ),
-      };
+    CabinClass.economy => const _CabinLayout(
+      letters: ['A', 'B', 'C', 'D', 'E', 'F'],
+      aisleAfter: {2},
+      rows: 10,
+      pattern: '3-3',
+      minMapWidth: 300,
+      seatHeight: 46,
+      seatRadius: 12,
+      aisleWidth: 30,
+      seatGap: 5,
+      rowGap: 8,
+    ),
+    CabinClass.premiumEconomy => const _CabinLayout(
+      letters: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+      aisleAfter: {1, 4},
+      rows: 7,
+      pattern: '2-3-2',
+      minMapWidth: 320,
+      seatHeight: 50,
+      seatRadius: 13,
+      aisleWidth: 26,
+      seatGap: 4,
+      rowGap: 10,
+    ),
+    CabinClass.business => const _CabinLayout(
+      letters: ['A', 'C', 'D', 'F'],
+      aisleAfter: {1},
+      rows: 5,
+      pattern: '2-2',
+      minMapWidth: 280,
+      seatHeight: 62,
+      seatRadius: 16,
+      aisleWidth: 44,
+      seatGap: 8,
+      rowGap: 14,
+    ),
+    CabinClass.first => const _CabinLayout(
+      letters: ['A', 'F'],
+      aisleAfter: {0},
+      rows: 3,
+      pattern: '1-1',
+      minMapWidth: 260,
+      seatHeight: 80,
+      seatRadius: 20,
+      aisleWidth: 80,
+      seatGap: 8,
+      rowGap: 18,
+    ),
+  };
 }
 
 class _CabinPalette {
@@ -1190,49 +1315,46 @@ class _CabinPalette {
   final Color heroStart;
   final Color heroEnd;
 
-  static _CabinPalette forClass(
-    CabinClass cabinClass,
-    Brightness brightness,
-  ) {
+  static _CabinPalette forClass(CabinClass cabinClass, Brightness brightness) {
     final dark = brightness == Brightness.dark;
     final onAccent = dark ? const Color(0xFF101418) : Colors.white;
 
     return switch (cabinClass) {
       CabinClass.economy => _CabinPalette(
-          accent: dark ? const Color(0xFF8FB2FF) : const Color(0xFF1E5BD6),
-          onAccent: onAccent,
-          soft: dark ? const Color(0xFF17243A) : const Color(0xFFEAF1FF),
-          heroStart: const Color(0xFF1E63DB),
-          heroEnd: const Color(0xFF1846C2),
-        ),
+        accent: dark ? const Color(0xFF8FB2FF) : const Color(0xFF1E5BD6),
+        onAccent: onAccent,
+        soft: dark ? const Color(0xFF17243A) : const Color(0xFFEAF1FF),
+        heroStart: const Color(0xFF1E63DB),
+        heroEnd: const Color(0xFF1846C2),
+      ),
       CabinClass.premiumEconomy => _CabinPalette(
-          accent: dark ? const Color(0xFF8ED6D0) : const Color(0xFF117A75),
-          onAccent: onAccent,
-          soft: dark ? const Color(0xFF142E2D) : const Color(0xFFE6F6F4),
-          heroStart: const Color(0xFF168E86),
-          heroEnd: const Color(0xFF0C4A56),
-        ),
+        accent: dark ? const Color(0xFF8ED6D0) : const Color(0xFF117A75),
+        onAccent: onAccent,
+        soft: dark ? const Color(0xFF142E2D) : const Color(0xFFE6F6F4),
+        heroStart: const Color(0xFF168E86),
+        heroEnd: const Color(0xFF0C4A56),
+      ),
       CabinClass.business => _CabinPalette(
-          accent: dark ? const Color(0xFFC6AEF8) : const Color(0xFF6442A8),
-          onAccent: onAccent,
-          soft: dark ? const Color(0xFF281F3B) : const Color(0xFFF1ECFB),
-          heroStart: const Color(0xFF7650B8),
-          heroEnd: const Color(0xFF3D2A70),
-        ),
+        accent: dark ? const Color(0xFFC6AEF8) : const Color(0xFF6442A8),
+        onAccent: onAccent,
+        soft: dark ? const Color(0xFF281F3B) : const Color(0xFFF1ECFB),
+        heroStart: const Color(0xFF7650B8),
+        heroEnd: const Color(0xFF3D2A70),
+      ),
       CabinClass.first => _CabinPalette(
-          accent: dark ? const Color(0xFFE6C779) : const Color(0xFF8A600F),
-          onAccent: onAccent,
-          soft: dark ? const Color(0xFF332B18) : const Color(0xFFFFF6E0),
-          heroStart: const Color(0xFFA67B26),
-          heroEnd: const Color(0xFF5E400D),
-        ),
+        accent: dark ? const Color(0xFFE6C779) : const Color(0xFF8A600F),
+        onAccent: onAccent,
+        soft: dark ? const Color(0xFF332B18) : const Color(0xFFFFF6E0),
+        heroStart: const Color(0xFFA67B26),
+        heroEnd: const Color(0xFF5E400D),
+      ),
     };
   }
 }
 
 String _cabin(String lang, CabinClass cabinClass) => switch (cabinClass) {
-      CabinClass.economy => tr(lang, 'economy'),
-      CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
-      CabinClass.business => tr(lang, 'business'),
-      CabinClass.first => tr(lang, 'first'),
-    };
+  CabinClass.economy => tr(lang, 'economy'),
+  CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
+  CabinClass.business => tr(lang, 'business'),
+  CabinClass.first => tr(lang, 'first'),
+};

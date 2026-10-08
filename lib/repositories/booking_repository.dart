@@ -156,6 +156,7 @@ Map<String, dynamic> _bookingToMap(
     'flightKey': booking.flight.scheduleKey,
 
     if (booking.tripId != null) 'tripId': booking.tripId,
+    if (booking.paymentLabel != null) 'paymentLabel': booking.paymentLabel,
 
     'fare': _fareToMap(
       booking.fare,
@@ -283,6 +284,8 @@ BookingEntity _bookingFromMap(
         : PaymentStatus.paid,
 
     tripId: json['tripId']?.toString(),
+
+    paymentLabel: json['paymentLabel']?.toString(),
   );
 }
 

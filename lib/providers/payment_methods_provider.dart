@@ -3,59 +3,72 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/payment_catalog.dart';
 import '../models/entities.dart';
 import '../services/firebase_service.dart';
 
+/// The user's saved payment methods (Profile > Payment methods), used to
+/// preselect and label the payment on the payment screen.
+///
+/// Only display metadata is ever stored. Never: full card numbers, CVV/CVC,
+/// OTP, PIN, bank passwords, account numbers, or the payer's PromptPay ID.
+/// firestore.rules enforces the same shape on users/{uid}/paymentMethods.
 class PaymentMethodsProvider extends ChangeNotifier {
-  final _prefs = SharedPreferencesAsync();
+  SharedPreferencesAsync? _prefsInstance;
+  SharedPreferencesAsync get _prefs => _prefsInstance ??= SharedPreferencesAsync();
+
+  /// Must equal the PromptPay detail string required by firestore.rules.
+  static const promptPayDetail = 'สแกน QR เพื่อชำระเงิน';
+
+  static const _defaultPromptPay = SavedPaymentMethodEntity(
+    id: 'promptpay-default',
+    type: SavedPaymentType.promptPay,
+    label: 'PromptPay',
+    detail: promptPayDetail,
+    isDefault: true,
+  );
 
   List<SavedPaymentMethodEntity> methods = [];
   String? _userId;
+  bool loading = false;
 
-  /// Loads only sanitized payment metadata.
-  ///
-  /// This provider intentionally never stores:
-  /// - full card numbers
-  /// - CVV/CVC
-  /// - OTP
-  /// - PIN
-  /// - bank passwords
-  /// - bank account numbers
-  /// - the payer's PromptPay phone/national ID
+  SavedPaymentMethodEntity? get defaultMethod {
+    for (final m in methods) {
+      if (m.isDefault) return m;
+    }
+    return methods.isEmpty ? null : methods.first;
+  }
+
+  bool get hasPromptPay => methods.any((m) => m.type == SavedPaymentType.promptPay);
+
+  List<SavedPaymentMethodEntity> ofType(SavedPaymentType type) =>
+      methods.where((m) => m.type == type).toList();
+
   Future<void> load(String userId) async {
+    if (loading) return;
     _userId = userId;
+    loading = true;
+    notifyListeners();
 
-    List<SavedPaymentMethodEntity> local = [];
-
-    final raw = await _prefs.getString('payment_methods_$userId');
-
-    if (raw != null) {
-      try {
-        final list = jsonDecode(raw) as List;
-
-        local = list
+    var local = <SavedPaymentMethodEntity>[];
+    try {
+      final raw = await _prefs.getString('payment_methods_$userId');
+      if (raw != null) {
+        local = (jsonDecode(raw) as List)
             .whereType<Map>()
-            .map(
-              (e) => SavedPaymentMethodEntity.fromJson(
-                Map<String, dynamic>.from(e),
-              ),
-            )
-            .map(_sanitize)
+            .map((e) => sanitize(SavedPaymentMethodEntity.fromJson(Map<String, dynamic>.from(e))))
             .toList();
-      } catch (_) {
-        local = [];
       }
+    } catch (_) {
+      local = [];
     }
 
-    List<SavedPaymentMethodEntity> cloud = [];
-
+    var cloud = <SavedPaymentMethodEntity>[];
     if (FirebaseService.enabled) {
       try {
-        final rows = await FirebaseService.paymentMethods(userId);
-
-        cloud = rows
+        cloud = (await FirebaseService.paymentMethods(userId))
             .map(SavedPaymentMethodEntity.fromJson)
-            .map(_sanitize)
+            .map(sanitize)
             .toList();
       } catch (_) {
         cloud = [];
@@ -63,209 +76,118 @@ class PaymentMethodsProvider extends ChangeNotifier {
     }
 
     methods = cloud.isNotEmpty ? cloud : local;
+    if (methods.isEmpty) methods = [_defaultPromptPay];
+    _normalizeDefault();
+    loading = false;
 
-    if (methods.isEmpty) {
-      methods = const [
-        SavedPaymentMethodEntity(
-          id: 'promptpay-default',
-          type: SavedPaymentType.promptPay,
-          label: 'PromptPay',
-          detail: 'สแกน QR เพื่อชำระเงิน',
-        ),
-      ];
-    }
+    // Re-save: migrates legacy entries to the sanitized shape.
+    try {
+      await _persist();
+    } catch (_) {}
+    notifyListeners();
+  }
 
-    // Re-save after loading. This acts as a local migration:
-    // legacy values are replaced with sanitized values.
+  Future<void> add(SavedPaymentMethodEntity method, {bool makeDefault = false}) async {
+    final safe = sanitize(method);
+    if (safe.type == SavedPaymentType.promptPay && hasPromptPay) return;
+    methods = [
+      for (final m in methods)
+        if (m.id != safe.id) makeDefault ? m.copyWith(isDefault: false) : m,
+      safe.copyWith(isDefault: makeDefault),
+    ];
+    _normalizeDefault();
     await _persist();
     notifyListeners();
   }
 
-  Future<void> add(
-    SavedPaymentMethodEntity method,
-  ) async {
-    final safe = _sanitize(method);
-
-    methods.removeWhere(
-      (item) => item.id == safe.id,
-    );
-
-    methods.add(safe);
-
+  Future<void> setDefault(String id) async {
+    methods = [for (final m in methods) m.copyWith(isDefault: m.id == id)];
     await _persist();
     notifyListeners();
   }
 
   Future<void> remove(String id) async {
-    methods.removeWhere(
-      (item) => item.id == id,
-    );
-
+    methods = methods.where((m) => m.id != id).toList();
+    _normalizeDefault();
     await _persist();
     notifyListeners();
   }
 
-  Future<void> clearAll() async {
-    methods = const [
-      SavedPaymentMethodEntity(
-        id: 'promptpay-default',
-        type: SavedPaymentType.promptPay,
-        label: 'PromptPay',
-        detail: 'สแกน QR เพื่อชำระเงิน',
-      ),
+  /// Exactly one default while any method exists.
+  void _normalizeDefault() {
+    if (methods.isEmpty) return;
+    final index = methods.indexWhere((m) => m.isDefault);
+    final keep = index == -1 ? 0 : index;
+    methods = [
+      for (var i = 0; i < methods.length; i++) methods[i].copyWith(isDefault: i == keep),
     ];
-
-    await _persist();
-    notifyListeners();
   }
 
   Future<void> _persist() async {
     final userId = _userId;
-
     if (userId == null) return;
-
-    final safeMethods = methods
-        .map(_sanitize)
-        .toList();
-
-    methods = safeMethods;
-
-    final maps = safeMethods
-        .map(
-          (e) => e.toJson(),
-        )
-        .toList();
-
-    await _prefs.setString(
-      'payment_methods_$userId',
-      jsonEncode(maps),
-    );
-
+    methods = methods.map(sanitize).toList();
+    final maps = methods.map((e) => e.toJson()).toList();
+    try {
+      await _prefs.setString('payment_methods_$userId', jsonEncode(maps));
+    } catch (_) {
+      // No local storage available (tests); Firestore is the source of truth.
+    }
     if (FirebaseService.enabled) {
-      await FirebaseService.savePaymentMethods(
-        userId,
-        maps,
-      );
+      await FirebaseService.savePaymentMethods(userId, maps);
     }
   }
 
-  SavedPaymentMethodEntity _sanitize(
-    SavedPaymentMethodEntity method,
-  ) {
+  /// Reduces a method to the fields we are allowed to keep.
+  @visibleForTesting
+  static SavedPaymentMethodEntity sanitize(SavedPaymentMethodEntity method) {
+    final id = _safeId(method.id);
     switch (method.type) {
       case SavedPaymentType.promptPay:
-        // A customer does not need to save their own PromptPay identifier
-        // in order to pay a merchant QR. Discard any supplied identifier.
+        // Paying a merchant QR never needs the payer's own PromptPay ID.
         return SavedPaymentMethodEntity(
-          id: _safeId(method.id),
+          id: id,
           type: SavedPaymentType.promptPay,
           label: 'PromptPay',
-          detail: 'สแกน QR เพื่อชำระเงิน',
+          detail: promptPayDetail,
+          isDefault: method.isDefault,
         );
 
       case SavedPaymentType.card:
-        // If the UI accidentally passes a full card number, retain only
-        // the final 4 digits. CVV/PIN/OTP are never retained.
-        final combined = '${method.label} ${method.detail}';
-
-        final digits = combined.replaceAll(
-          RegExp(r'\D'),
-          '',
-        );
-
-        final last4 = digits.length >= 4
-            ? digits.substring(digits.length - 4)
-            : '';
-
-        final brand = _cardBrand(combined);
-
+        final brand = cardBrands
+            .where((b) => '${method.label} ${method.detail}'.toLowerCase().contains(b.name.toLowerCase()))
+            .map((b) => b.name)
+            .firstOrNull;
+        // First group of exactly four digits = last 4 of the card.
+        final last4 = RegExp(r'(?<!\d)(\d{4})(?!\d)').firstMatch(method.detail)?.group(1);
+        final expiry = RegExp(r'(?<!\d)(0[1-9]|1[0-2])/(\d{2})(?!\d)').firstMatch(method.detail);
         return SavedPaymentMethodEntity(
-          id: _safeId(method.id),
+          id: id,
           type: SavedPaymentType.card,
-          label: brand,
-          detail: last4.isEmpty
-              ? 'ไม่เก็บเลขบัตร'
-              : '•••• $last4',
+          label: brand ?? 'Card',
+          detail: [
+            if (last4 != null) '•••• $last4',
+            if (expiry != null) '${expiry.group(1)}/${expiry.group(2)}',
+          ].join(' · '),
+          isDefault: method.isDefault,
         );
 
       case SavedPaymentType.mobileBanking:
-        // Keep only a short display name. Strip digits so an account
-        // number cannot accidentally be stored as the "bank name".
-        final bank = method.detail
-            .replaceAll(RegExp(r'[0-9]'), '')
-            .replaceAll(
-              RegExp(
-                r'cvv|cvc|otp|pin|password|passcode',
-                caseSensitive: false,
-              ),
-              '',
-            )
-            .replaceAll(
-              RegExp(
-                r'รหัสผ่าน|รหัสโอทีพี|รหัส otp|รหัส pin',
-              ),
-              '',
-            )
-            .replaceAll(
-              RegExp(r'\s+'),
-              ' ',
-            )
-            .trim();
-
-        final safeBank = bank.isEmpty
-            ? 'ธนาคารที่บันทึกไว้'
-            : _limit(bank, 40);
-
+        // Only a known bank name; never an account number.
+        final bank = bankFromStored(method.detail);
         return SavedPaymentMethodEntity(
-          id: _safeId(method.id),
+          id: id,
           type: SavedPaymentType.mobileBanking,
           label: 'Mobile Banking',
-          detail: safeBank,
+          detail: bank?.stored ?? 'Bank',
+          isDefault: method.isDefault,
         );
     }
   }
 
-  String _cardBrand(String raw) {
-    final text = raw.toLowerCase();
-
-    if (text.contains('visa')) {
-      return 'Visa';
-    }
-
-    if (text.contains('mastercard') ||
-        text.contains('master card')) {
-      return 'Mastercard';
-    }
-
-    if (text.contains('amex') ||
-        text.contains('american express')) {
-      return 'American Express';
-    }
-
-    if (text.contains('jcb')) {
-      return 'JCB';
-    }
-
-    return 'บัตร';
-  }
-
-  String _safeId(String raw) {
-    final cleaned = raw
-        .replaceAll(
-          RegExp(r'[^A-Za-z0-9_-]'),
-          '_',
-        )
-        .trim();
-
-    if (cleaned.isNotEmpty) {
-      return _limit(cleaned, 80);
-    }
-
-    return 'method_${DateTime.now().microsecondsSinceEpoch}';
-  }
-
-  String _limit(String value, int max) {
-    if (value.length <= max) return value;
-    return value.substring(0, max);
+  static String _safeId(String raw) {
+    final cleaned = raw.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_').trim();
+    if (cleaned.isEmpty) return 'method_${DateTime.now().microsecondsSinceEpoch}';
+    return cleaned.length <= 80 ? cleaned : cleaned.substring(0, 80);
   }
 }

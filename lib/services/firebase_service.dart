@@ -326,6 +326,7 @@ class FirebaseService {
       final type = raw['type']?.toString().trim() ?? '';
       final label = raw['label']?.toString().trim() ?? '';
       final detail = raw['detail']?.toString().trim() ?? '';
+      final isDefault = raw['isDefault'] == true;
 
       if (id.isEmpty) continue;
 
@@ -338,6 +339,7 @@ class FirebaseService {
           'type': type,
           'label': label,
           'detail': detail,
+          'isDefault': isDefault,
           'updatedAt': FieldValue.serverTimestamp(),
         },
       );

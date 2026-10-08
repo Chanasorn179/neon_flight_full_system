@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
 import '../../widgets/app_widgets.dart';
 import '../../services/profile_store.dart';
+import 'payment_methods_screen.dart';
 import '../../services/firebase_service.dart';
 import '../../models/entities.dart';
 import '../../providers/auth_provider.dart';
@@ -116,7 +117,7 @@ class ProfileScreen extends StatelessWidget {
                         subtitle: tr(lang, 'payment_methods_sub'),
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => _PaymentMethodsScreen(lang: lang),
+                            builder: (_) => const PaymentMethodsScreen(),
                           ),
                         ),
                       ),
@@ -1076,179 +1077,6 @@ class _PassportScreenState extends State<_PassportScreen> {
                 ],
               ),
             ),
-    );
-  }
-}
-
-class _PaymentMethodsScreen extends StatefulWidget {
-  const _PaymentMethodsScreen({required this.lang});
-  final String lang;
-
-  @override
-  State<_PaymentMethodsScreen> createState() => _PaymentMethodsScreenState();
-}
-
-class _PaymentMethodsScreenState extends State<_PaymentMethodsScreen> {
-  bool loaded = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!loaded) {
-      loaded = true;
-      final user = context.read<AuthProvider>().currentUser;
-      final paymentMethods = context.read<PaymentMethodsProvider>();
-      if (user != null) {
-        Future.microtask(() => paymentMethods.load(user.id));
-      }
-    }
-  }
-
-  Future<void> _addMethod() async {
-    final type = await showModalBottomSheet<SavedPaymentType>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.qr_code_rounded)),
-                title: const Text('PromptPay'),
-                subtitle: const Text('บันทึกเป็นวิธีชำระเงินที่ต้องการ'),
-                onTap: () => Navigator.pop(context, SavedPaymentType.promptPay),
-              ),
-              ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.credit_card_rounded)),
-                title: const Text('บัตรเครดิต / เดบิต'),
-                subtitle: const Text('เก็บเฉพาะชื่อและเลข 4 หลักท้าย ไม่เก็บ CVV'),
-                onTap: () => Navigator.pop(context, SavedPaymentType.card),
-              ),
-              ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.account_balance_rounded)),
-                title: const Text('Mobile Banking'),
-                subtitle: const Text('บันทึกชื่อธนาคารที่ใช้งาน'),
-                onTap: () => Navigator.pop(context, SavedPaymentType.mobileBanking),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (type == null || !mounted) return;
-
-    final label = TextEditingController();
-    final detail = TextEditingController();
-    if (type == SavedPaymentType.promptPay) {
-      label.text = 'PromptPay';
-      detail.text = 'สแกน QR ตอนชำระเงิน';
-    } else if (type == SavedPaymentType.mobileBanking) {
-      label.text = 'Mobile Banking';
-    }
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('เพิ่มวิธีชำระเงิน'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: label,
-              decoration: InputDecoration(
-                labelText: type == SavedPaymentType.card
-                    ? 'ชื่อบนบัตร / ชื่อเรียก'
-                    : 'ชื่อวิธีชำระเงิน',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: detail,
-              keyboardType: type == SavedPaymentType.card
-                  ? TextInputType.number
-                  : TextInputType.text,
-              maxLength: type == SavedPaymentType.card ? 4 : null,
-              decoration: InputDecoration(
-                labelText: type == SavedPaymentType.card
-                    ? 'เลขบัตร 4 หลักท้าย'
-                    : 'รายละเอียด',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('ยกเลิก'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('เพิ่ม'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-
-    final user = context.read<AuthProvider>().currentUser;
-    if (user == null) return;
-
-    await context.read<PaymentMethodsProvider>().add(
-          SavedPaymentMethodEntity(
-            id: '${type.name}-${DateTime.now().millisecondsSinceEpoch}',
-            type: type,
-            label: label.text.trim(),
-            detail: detail.text.trim(),
-          ),
-        );
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr(widget.lang, 'saved'))),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.watch<PaymentMethodsProvider>();
-
-    return Scaffold(
-      appBar: AppBar(title: Text(tr(widget.lang, 'payment_methods'))),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addMethod,
-        icon: const Icon(Icons.add_rounded),
-        label: Text(tr(widget.lang, 'add')),
-      ),
-      body: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-        itemCount: provider.methods.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          final method = provider.methods[index];
-          return Card(
-            child: ListTile(
-              leading: CircleAvatar(
-                child: Icon(
-                  switch (method.type) {
-                    SavedPaymentType.promptPay => Icons.qr_code_rounded,
-                    SavedPaymentType.card => Icons.credit_card_rounded,
-                    SavedPaymentType.mobileBanking => Icons.account_balance_rounded,
-                  },
-                ),
-              ),
-              title: Text(method.label, style: const TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: Text(method.detail),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => context.read<PaymentMethodsProvider>().remove(method.id),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }
