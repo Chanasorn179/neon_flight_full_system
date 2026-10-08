@@ -33,6 +33,8 @@ import 'package:mini_projects/screens/booking/ticket_screen.dart';
 import 'package:mini_projects/screens/flights/flight_results_screen.dart';
 import 'package:mini_projects/screens/home/main_shell.dart';
 import 'package:mini_projects/screens/profile/profile_screen.dart';
+import 'package:mini_projects/widgets/notification_bell.dart';
+import 'package:mini_projects/widgets/notification_bell.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
@@ -252,6 +254,37 @@ void main() {
         prepare: () async {
           bookings.bookings = [booking(PaymentStatus.pending), booking(PaymentStatus.paid)];
         },
+      ));
+  testWidgets('notifications', (t) => shoot(
+        t,
+        'notifications',
+        () => const MainShell(),
+        prepare: () async {
+          // Runs for light and dark; seed once (seat locks reject a repeat).
+          if ((await api.bookings(auth.currentUser!.id)).isNotEmpty) return;
+          final soon = await api.searchFlights(
+            'BKK',
+            'CNX',
+            DateTime.now().add(const Duration(days: 1)),
+          );
+          await api.createBookings([
+            booking(PaymentStatus.pending),
+            BookingEntity(
+              id: 'NF55501234',
+              userId: auth.currentUser!.id,
+              flight: soon.first,
+              cabinClass: CabinClass.economy,
+              passengers: [passenger],
+              seats: const ['3A'],
+              fare: const FareBreakdown(fare: 2000, tax: 700, service: 150, seatFee: 200),
+              paymentMethod: PaymentMethod.promptPay,
+              status: BookingStatus.upcoming,
+              createdAt: DateTime(2026, 10, 2),
+              paymentStatus: PaymentStatus.paid,
+            ),
+          ]);
+        },
+        act: (t) async => t.tap(find.byType(NotificationBell)),
       ));
   testWidgets('profile', (t) => shoot(t, 'profile', () => const Scaffold(body: ProfileScreen())));
 }

@@ -10,6 +10,7 @@ import '../../providers/language_provider.dart';
 import '../../services/transfer_dispatch_service.dart';
 import '../../widgets/airport_picker.dart';
 import '../../widgets/app_widgets.dart';
+import '../../widgets/notification_bell.dart';
 import '../flights/flight_results_screen.dart';
 import 'airport_transfer_section.dart';
 
@@ -99,23 +100,7 @@ class DashboardScreen extends StatelessWidget {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: IconButton(
-              tooltip: tr(lang, 'notifications'),
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(tr(lang, 'no_notifications'))),
-              ),
-              style: IconButton.styleFrom(
-                backgroundColor: theme.colorScheme.surfaceContainerLowest,
-                foregroundColor: theme.colorScheme.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                side: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withValues(alpha: .6),
-                ),
-              ),
-              icon: const Icon(Icons.notifications_none_rounded),
-            ),
+            child: const NotificationBell(),
           ),
         ],
       ),

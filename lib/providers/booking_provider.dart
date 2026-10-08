@@ -1,4 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/app_notice.dart';
 import '../models/entities.dart';
 import '../repositories/booking_repository.dart';
 
@@ -6,6 +11,55 @@ class BookingProvider extends ChangeNotifier {
   BookingProvider(this.repository);
   final BookingRepository repository;
   List<BookingEntity> bookings = [];
+
+  StreamSubscription<List<BookingEntity>>? _watch;
+  String? _watchedUser;
+
+  /// Notice ids the user has already seen (persisted on the device).
+  Set<String> seenNotices = {};
+  bool _seenLoaded = false;
+  static const _seenKey = 'seen_notices';
+
+  List<AppNotice> get notices => AppNotice.fromBookings(bookings, DateTime.now());
+
+  int get unseenCount => notices.where((n) => !seenNotices.contains(n.id)).length;
+
+  Future<void> _loadSeen() async {
+    if (_seenLoaded) return;
+    _seenLoaded = true;
+    try {
+      seenNotices = (await SharedPreferencesAsync().getStringList(_seenKey) ?? []).toSet();
+      notifyListeners();
+    } catch (_) {
+      // No local storage (e.g. tests): everything starts unseen.
+    }
+  }
+
+  Future<void> markNoticesSeen() async {
+    seenNotices = {...seenNotices, ...notices.map((n) => n.id)};
+    notifyListeners();
+    try {
+      await SharedPreferencesAsync().setStringList(_seenKey, seenNotices.toList());
+    } catch (_) {}
+  }
+
+  /// Keeps [bookings] in sync with the server so payment confirmations show
+  /// up live (ticket QR, history, notification bell).
+  void _watchUser(String userId) {
+    if (_watchedUser == userId) return;
+    _watch?.cancel();
+    _watchedUser = userId;
+    _watch = repository.watch(userId).listen((fresh) {
+      bookings = fresh..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      notifyListeners();
+    }, onError: (_) {});
+  }
+
+  @override
+  void dispose() {
+    _watch?.cancel();
+    super.dispose();
+  }
   final List<TransferBookingEntity> transferBookings = [];
   bool loading = false;
 
@@ -122,6 +176,8 @@ class BookingProvider extends ChangeNotifier {
     try {
       bookings = await repository.forUser(userId)
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _watchUser(userId);
+      await _loadSeen();
     } finally {
       loading = false;
       notifyListeners();

@@ -15,6 +15,10 @@ abstract class BookingRepository {
 
   /// Cancels unpaid bookings and releases their seats.
   Future<void> cancel(List<BookingEntity> bookings);
+
+  /// The user's bookings, re-emitted when they change on the server (e.g. an
+  /// admin confirms a payment). Mock mode has no server and never emits.
+  Stream<List<BookingEntity>> watch(String userId);
 }
 
 /// ใช้สำหรับโหมด Mock / Offline fallback
@@ -43,6 +47,9 @@ class MockBookingRepository implements BookingRepository {
   @override
   Future<void> cancel(List<BookingEntity> bookings) =>
       api.cancelBookings({for (final b in bookings) b.id});
+
+  @override
+  Stream<List<BookingEntity>> watch(String userId) => const Stream.empty();
 }
 
 /// ใช้ Firebase Firestore จริง
@@ -67,6 +74,20 @@ class FirebaseBookingRepository implements BookingRepository {
   @override
   Future<void> cancel(List<BookingEntity> bookings) =>
       FirebaseService.cancelBookings([for (final b in bookings) b.id]);
+
+  @override
+  Stream<List<BookingEntity>> watch(String userId) =>
+      FirebaseService.watchBookingsForUser(userId).map((rows) {
+        final bookings = <BookingEntity>[];
+        for (final row in rows) {
+          try {
+            bookings.add(_bookingFromMap(row));
+          } catch (_) {
+            // Skip old or incomplete documents, as forUser does.
+          }
+        }
+        return bookings;
+      });
 
   @override
   Future<List<BookingEntity>> forUser(String userId) async {

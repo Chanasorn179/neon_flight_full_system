@@ -1,6 +1,10 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
@@ -14,9 +18,80 @@ import '../../widgets/airline_logo.dart';
 import '../../widgets/app_widgets.dart';
 import 'ticket_scanner_screen.dart';
 
-class TicketScreen extends StatelessWidget {
+class TicketScreen extends StatefulWidget {
   const TicketScreen({super.key, required this.booking});
   final BookingEntity booking;
+
+  @override
+  State<TicketScreen> createState() => _TicketScreenState();
+}
+
+class _TicketScreenState extends State<TicketScreen> {
+  /// Wraps the boarding pass so it can be captured as an image.
+  final _passKey = GlobalKey();
+  final _shareButtonKey = GlobalKey();
+  bool sharing = false;
+
+  BookingEntity get booking => widget.booking;
+
+  /// Renders the boarding pass to PNG and opens the system share sheet,
+  /// where the user can also save it to the device.
+  Future<void> _share(String lang) async {
+    setState(() => sharing = true);
+    try {
+      final boundary =
+          _passKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 3);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (bytes == null) throw StateError('No image data');
+
+      final flight = booking.flight;
+      final lines = [
+        trArgs(lang, 'share_ticket_text', {
+          'id': booking.id,
+          'route': '${flight.departure.code} → ${flight.arrival.code}',
+          'flight': flight.flightNumber,
+          'date': dateOf(flight.departureTime),
+          'time': timeOf(flight.departureTime),
+        }),
+        if (booking.isPaid)
+          trArgs(lang, 'share_ticket_verify', {
+            'url': TicketQrService.encode(booking),
+          })
+        else
+          tr(lang, 'payment_pending'),
+      ];
+
+      final box =
+          _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
+      final fileName = 'neon-flight-${booking.id}.png';
+      await SharePlus.instance.share(
+        ShareParams(
+          text: lines.join('\n'),
+          subject: 'E-Ticket ${booking.id}',
+          files: [
+            XFile.fromData(
+              bytes.buffer.asUint8List(),
+              mimeType: 'image/png',
+              name: fileName,
+            ),
+          ],
+          fileNameOverrides: [fileName],
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr(lang, 'share_failed'))));
+    } finally {
+      if (mounted) setState(() => sharing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,9 +105,7 @@ class TicketScreen extends StatelessWidget {
           IconButton(
             tooltip: tr(lang, 'scan_ticket'),
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const TicketScannerScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const TicketScannerScreen()),
             ),
             icon: const Icon(Icons.qr_code_scanner_rounded),
           ),
@@ -45,87 +118,79 @@ class TicketScreen extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 520),
             child: Column(
               children: [
-                _BoardingPass(
-                  booking: booking,
-                  lang: lang,
-                  // The QR only appears once the server has confirmed
-                  // payment and issued the public ticket record.
-                  bottom: StreamBuilder<PaymentStatus>(
-                    stream: booking.isPaid
-                        ? null
-                        : FirebaseService.watchPaymentStatus(booking.id),
-                    initialData: booking.paymentStatus,
-                    builder: (context, snapshot) {
-                      if (booking.status == BookingStatus.cancelled) {
-                        return const _CancelledNotice();
-                      }
-                      if (snapshot.data != PaymentStatus.paid) {
-                        return _PendingPayment(booking: booking);
-                      }
-                      return Column(
-                        children: [
-                          // Big QR with a generous quiet zone: easy to scan
-                          // with another phone's camera or a generic QR app.
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
+                RepaintBoundary(
+                  key: _passKey,
+                  child: _BoardingPass(
+                    booking: booking,
+                    lang: lang,
+                    // The QR only appears once the server has confirmed
+                    // payment and issued the public ticket record.
+                    bottom: StreamBuilder<PaymentStatus>(
+                      stream: booking.isPaid
+                          ? null
+                          : FirebaseService.watchPaymentStatus(booking.id),
+                      initialData: booking.paymentStatus,
+                      builder: (context, snapshot) {
+                        if (booking.status == BookingStatus.cancelled) {
+                          return const _CancelledNotice();
+                        }
+                        if (snapshot.data != PaymentStatus.paid) {
+                          return _PendingPayment(booking: booking);
+                        }
+                        return Column(
+                          children: [
+                            // Big QR with a generous quiet zone: easy to scan
+                            // with another phone's camera or a generic QR app.
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.all(14),
+                              child: QrImageView(
+                                data: qrData,
+                                version: QrVersions.auto,
+                                size: 220,
+                                backgroundColor: Colors.white,
+                                padding: const EdgeInsets.all(10),
+                                gapless: true,
+                                errorCorrectionLevel: QrErrorCorrectLevel.M,
+                              ),
                             ),
-                            padding: const EdgeInsets.all(14),
-                            child: QrImageView(
-                              data: qrData,
-                              version: QrVersions.auto,
-                              size: 220,
-                              backgroundColor: Colors.white,
-                              padding: const EdgeInsets.all(10),
-                              gapless: true,
-                              errorCorrectionLevel: QrErrorCorrectLevel.M,
+                            const SizedBox(height: 10),
+                            Text(
+                              booking.id,
+                              style: const TextStyle(
+                                letterSpacing: 2,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            booking.id,
-                            style: const TextStyle(
-                              letterSpacing: 2,
-                              fontWeight: FontWeight.w700,
+                            const SizedBox(height: 4),
+                            Text(
+                              tr(lang, 'ticket_qr_hint'),
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            tr(lang, 'ticket_qr_hint'),
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => ScaffoldMessenger.of(context)
-                            .showSnackBar(
-                          SnackBar(content: Text(tr(lang, 'downloaded'))),
-                        ),
-                        icon: const Icon(Icons.download),
-                        label: Text(tr(lang, 'download')),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => ScaffoldMessenger.of(context)
-                            .showSnackBar(
-                          SnackBar(content: Text(tr(lang, 'share_opened'))),
-                        ),
-                        icon: const Icon(Icons.share),
-                        label: Text(tr(lang, 'share')),
-                      ),
-                    ),
-                  ],
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: _shareButtonKey,
+                    onPressed: sharing ? null : () => _share(lang),
+                    icon: sharing
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.ios_share_rounded),
+                    label: Text(tr(lang, 'share_ticket')),
+                  ),
                 ),
                 const SizedBox(height: 10),
                 SizedBox(
@@ -150,11 +215,11 @@ class TicketScreen extends StatelessWidget {
 }
 
 String _cabin(String lang, CabinClass c) => switch (c) {
-      CabinClass.economy => tr(lang, 'economy'),
-      CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
-      CabinClass.business => tr(lang, 'business'),
-      CabinClass.first => tr(lang, 'first'),
-    };
+  CabinClass.economy => tr(lang, 'economy'),
+  CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
+  CabinClass.business => tr(lang, 'business'),
+  CabinClass.first => tr(lang, 'first'),
+};
 
 class _BoardingPass extends StatelessWidget {
   const _BoardingPass({
@@ -200,9 +265,7 @@ class _BoardingPass extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
-            decoration: BoxDecoration(
-              gradient: AppTheme.heroGradient,
-            ),
+            decoration: BoxDecoration(gradient: AppTheme.heroGradient),
             child: Column(
               children: [
                 Row(
@@ -240,7 +303,9 @@ class _BoardingPass extends StatelessWidget {
                   children: [
                     _Endpoint(
                       code: flight.departure.code,
-                      city: lang == 'th' ? flight.departure.cityTh : flight.departure.cityEn,
+                      city: lang == 'th'
+                          ? flight.departure.cityTh
+                          : flight.departure.cityEn,
                       time: timeOf(flight.departureTime),
                       color: onHeader,
                     ),
@@ -249,7 +314,10 @@ class _BoardingPass extends StatelessWidget {
                         children: [
                           Icon(Icons.flight_rounded, color: onHeader),
                           const SizedBox(height: 4),
-                          Container(height: 1.5, color: onHeader.withValues(alpha: .4)),
+                          Container(
+                            height: 1.5,
+                            color: onHeader.withValues(alpha: .4),
+                          ),
                           const SizedBox(height: 6),
                           Text(
                             '$h ${tr(lang, 'hours')} $m ${tr(lang, 'minutes')}',
@@ -262,7 +330,9 @@ class _BoardingPass extends StatelessWidget {
                     ),
                     _Endpoint(
                       code: flight.arrival.code,
-                      city: lang == 'th' ? flight.arrival.cityTh : flight.arrival.cityEn,
+                      city: lang == 'th'
+                          ? flight.arrival.cityTh
+                          : flight.arrival.cityEn,
                       time: timeOf(flight.arrivalTime),
                       color: onHeader,
                       alignEnd: true,
@@ -284,15 +354,32 @@ class _BoardingPass extends StatelessWidget {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    Expanded(child: _Detail(label: tr(lang, 'date'), value: dateOf(flight.departureTime))),
-                    Expanded(child: _Detail(label: tr(lang, 'seat'), value: booking.seats.join(', '))),
+                    Expanded(
+                      child: _Detail(
+                        label: tr(lang, 'date'),
+                        value: dateOf(flight.departureTime),
+                      ),
+                    ),
+                    Expanded(
+                      child: _Detail(
+                        label: tr(lang, 'seat'),
+                        value: booking.seats.join(', '),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    Expanded(child: _Detail(label: 'Booking ID', value: booking.id)),
-                    Expanded(child: _Detail(label: tr(lang, 'flight'), value: flight.flightNumber)),
+                    Expanded(
+                      child: _Detail(label: 'Booking ID', value: booking.id),
+                    ),
+                    Expanded(
+                      child: _Detail(
+                        label: tr(lang, 'flight'),
+                        value: flight.flightNumber,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -330,8 +417,9 @@ class _Endpoint extends StatelessWidget {
     return SizedBox(
       width: 96,
       child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: alignEnd
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Text(
             code,
@@ -387,7 +475,9 @@ class _Detail extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             value,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),
@@ -471,7 +561,9 @@ class _PendingPayment extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             [
-              trArgs(lang, 'payment_pending_amount', {'amount': money(booking.fare.total)}),
+              trArgs(lang, 'payment_pending_amount', {
+                'amount': money(booking.fare.total),
+              }),
               trArgs(lang, 'payment_pending_reference', {'id': booking.id}),
               tr(lang, 'payment_pending_qr'),
             ].join('\n'),
@@ -483,7 +575,9 @@ class _PendingPayment extends StatelessWidget {
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: theme.colorScheme.error,
-                side: BorderSide(color: theme.colorScheme.error.withValues(alpha: .6)),
+                side: BorderSide(
+                  color: theme.colorScheme.error.withValues(alpha: .6),
+                ),
                 minimumSize: const Size(0, 48),
               ),
               onPressed: () => _confirmCancel(context, lang),
@@ -506,10 +600,12 @@ class _PendingPayment extends StatelessWidget {
         return AlertDialog(
           icon: Icon(Icons.warning_amber_rounded, color: colors.error),
           title: Text(tr(lang, 'cancel_booking')),
-          content: Text([
-            trArgs(lang, 'cancel_booking_confirm', {'id': booking.id}),
-            if (isTrip) tr(lang, 'cancel_trip_note'),
-          ].join('\n\n')),
+          content: Text(
+            [
+              trArgs(lang, 'cancel_booking_confirm', {'id': booking.id}),
+              if (isTrip) tr(lang, 'cancel_trip_note'),
+            ].join('\n\n'),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -531,10 +627,14 @@ class _PendingPayment extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await provider.cancel(booking);
-      messenger.showSnackBar(SnackBar(content: Text(tr(lang, 'booking_cancelled'))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(tr(lang, 'booking_cancelled'))),
+      );
       if (context.mounted) Navigator.of(context).pop();
     } catch (_) {
-      messenger.showSnackBar(SnackBar(content: Text(tr(lang, 'cancel_failed'))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(tr(lang, 'cancel_failed'))),
+      );
     }
   }
 }
@@ -559,13 +659,12 @@ class _CancelledNotice extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             tr(lang, 'booking_cancelled'),
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 4),
-          Text(
-            tr(lang, 'booking_cancelled_body'),
-            textAlign: TextAlign.center,
-          ),
+          Text(tr(lang, 'booking_cancelled_body'), textAlign: TextAlign.center),
         ],
       ),
     );
