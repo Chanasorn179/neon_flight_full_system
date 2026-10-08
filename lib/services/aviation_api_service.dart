@@ -80,7 +80,7 @@ class AviationApiService {
 
       if (response.statusCode != 200) {
         if (allowMockFallback) {
-          return mock.searchFlights(
+          return await mock.searchFlights(
             from,
             to,
             date,
@@ -104,7 +104,7 @@ class AviationApiService {
 
       if (decoded is! List) {
         if (allowMockFallback) {
-          return mock.searchFlights(
+          return await mock.searchFlights(
             from,
             to,
             date,
@@ -128,7 +128,7 @@ class AviationApiService {
 
       if (flights.isEmpty &&
           allowMockFallback) {
-        return mock.searchFlights(
+        return await mock.searchFlights(
           from,
           to,
           date,

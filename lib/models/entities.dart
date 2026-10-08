@@ -29,11 +29,13 @@ extension CabinClassX on CabinClass {
     CabinClass.business => 2.8,
     CabinClass.first => 4.6,
   };
+  /// Seat selection fee per seat: low-cost carriers charge for economy seat
+  /// choice; business and first include it.
   double get seatFee => switch (this) {
-    CabinClass.economy => 200,
-    CabinClass.premiumEconomy => 350,
-    CabinClass.business => 800,
-    CabinClass.first => 1500,
+    CabinClass.economy => 190,
+    CabinClass.premiumEconomy => 390,
+    CabinClass.business => 0,
+    CabinClass.first => 0,
   };
 }
 

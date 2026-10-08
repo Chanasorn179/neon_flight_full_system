@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
+import '../../data/fares.dart';
 import '../../data/thai_airlines.dart';
 import '../../models/entities.dart';
 import '../../providers/flight_provider.dart';
@@ -162,6 +163,10 @@ class FlightCard extends StatelessWidget {
     final h = flight.duration.inHours;
     final m = flight.duration.inMinutes.remainder(60);
     final airline = airlineForFlight(flight.airline, flight.flightNumber);
+    final passengers = context.watch<FlightProvider>().passengerCount;
+    // What the passenger actually pays per seat: fare + airport tax.
+    final perPerson = flight.price(cabinClass) +
+        passengerServiceCharge(flight.departure, flight.arrival);
 
     return Card(
       child: Padding(
@@ -219,7 +224,21 @@ class FlightCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(_cabin(lang, cabinClass)),
-                      Text(money(flight.price(cabinClass)), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                      Text(
+                        money(perPerson),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                      Text(
+                        passengers > 1
+                            ? trArgs(lang, 'total_for_n', {
+                                'n': '$passengers',
+                                'amount': money(perPerson * passengers),
+                              })
+                            : tr(lang, 'per_person_incl_tax'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
                     ],
                   ),
                 ),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/fares.dart';
 import '../models/app_notice.dart';
 import '../models/entities.dart';
 import '../repositories/booking_repository.dart';
@@ -72,8 +73,10 @@ class BookingProvider extends ChangeNotifier {
   ) =>
       FareBreakdown(
         fare: flight.price(cabinClass) * passengerCount,
-        tax: 700 * passengerCount.toDouble(),
-        service: 150 * passengerCount.toDouble(),
+        // Airport tax (PSC) per departing passenger, per the AOT rates.
+        tax: passengerServiceCharge(flight.departure, flight.arrival) *
+            passengerCount,
+        service: 0,
         seatFee: seatCount * cabinClass.seatFee,
       );
 

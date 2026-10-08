@@ -326,7 +326,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 children: [
                   _line(tr(lang, 'fare'), fare.fare),
                   _line(tr(lang, 'airport_tax'), fare.tax),
-                  _line(tr(lang, 'service_fee'), fare.service),
+                  if (fare.service > 0) _line(tr(lang, 'service_fee'), fare.service),
                   _line(tr(lang, 'seat_fee'), fare.seatFee),
                   const Divider(),
                   _line(tr(lang, 'total'), fare.total, bold: true),

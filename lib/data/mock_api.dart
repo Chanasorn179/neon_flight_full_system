@@ -1,5 +1,6 @@
 import 'dart:math';
 import '../models/entities.dart';
+import 'fares.dart';
 import 'thai_airlines.dart';
 import 'thai_airports.dart';
 
@@ -105,7 +106,12 @@ class MockApi {
                 : traffic > 300000
                     ? 4
                     : 2;
-    final blockMinutes = _blockMinutes[to] ?? _blockMinutes[from] ?? 75;
+    final km = distanceKm(from, to) ?? 600;
+    final block = blockTime(km);
+    final today = DateTime.now();
+    final daysAhead = DateTime(date.year, date.month, date.day)
+        .difference(DateTime(today.year, today.month, today.day))
+        .inDays;
 
     // Seeded by route and day so a search always returns the same schedule;
     // seat locks rely on flight numbers being stable.
@@ -119,11 +125,16 @@ class MockApi {
       final airline = carriers[i % carriers.length];
       final depTime = DateTime(date.year, date.month, date.day, 6)
           .add(Duration(minutes: i * (16 * 60 ~/ count) + rng.nextInt(4) * 10));
-      final duration = Duration(minutes: blockMinutes + rng.nextInt(3) * 5);
-      final baseFare = international
-          ? 3200 + blockMinutes * 18.0
-          : 900 + blockMinutes * 14.0;
-      final premium = airline.code == 'TG' || airline.code == 'PG' ? 1.35 : 1.0;
+      final duration = block + Duration(minutes: rng.nextInt(3) * 5);
+      final fare = economyFare(
+        airlineCode: airline.code,
+        km: km,
+        international: international,
+        daysAhead: daysAhead,
+        hour: depTime.hour,
+        weekday: depTime.weekday,
+        jitter: rng.nextDouble() * 2 - 1,
+      );
       return FlightEntity(
         id: '$from${to}_${date.year}${date.month}${date.day}_$i',
         airline: airline.nameEn,
@@ -132,32 +143,12 @@ class MockApi {
         arrival: arr,
         departureTime: depTime,
         arrivalTime: depTime.add(duration),
-        basePrice: (baseFare * premium + rng.nextInt(400)).roundToDouble(),
+        basePrice: fare,
         availableSeats: 3 + rng.nextInt(18),
       );
     });
   }
 
-  /// Rough block times from Bangkok, used only for demo schedules.
-  static const _blockMinutes = <String, int>{
-    'NRT': 370,
-    'ICN': 350,
-    'SIN': 145,
-    'HKT': 85,
-    'USM': 70,
-    'KBV': 80,
-    'HDY': 85,
-    'NAW': 100,
-    'BTZ': 105,
-    'TST': 85,
-    'NST': 75,
-    'URT': 70,
-    'CNX': 75,
-    'CEI': 80,
-    'NNT': 75,
-    'UTP': 40,
-    'HHQ': 40,
-  };
 
   Future<List<BookingEntity>> createBookings(List<BookingEntity> bookings) async {
     await _wait();
