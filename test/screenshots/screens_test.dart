@@ -34,7 +34,6 @@ import 'package:mini_projects/screens/flights/flight_results_screen.dart';
 import 'package:mini_projects/screens/home/main_shell.dart';
 import 'package:mini_projects/screens/profile/profile_screen.dart';
 import 'package:mini_projects/widgets/notification_bell.dart';
-import 'package:mini_projects/widgets/notification_bell.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
