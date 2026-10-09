@@ -25,10 +25,11 @@ test('starts the API, creates transfer schema and fails closed without LINE conf
   const baseUrl = `http://127.0.0.1:${address.port}/api`;
   const healthResponse = await fetch(`${baseUrl}/health`);
   assert.equal(healthResponse.status, 200);
-  assert.deepEqual(await healthResponse.json(), {
-    ok: true,
-    service: 'neon-flight-api',
-  });
+  const health = await healthResponse.json();
+  assert.equal(health.ok, true);
+  assert.equal(health.service, 'neon-flight-api');
+  // Depends on AVIATIONSTACK_API_KEY in the environment running the tests.
+  assert.equal(typeof health.aviationConfigured, 'boolean');
 
   const dispatchResponse = await fetch(`${baseUrl}/transfer-bookings`, {
     method: 'POST',

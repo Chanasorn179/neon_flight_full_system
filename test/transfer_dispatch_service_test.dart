@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:mini_projects/models/entities.dart';
+import 'package:mini_projects/models/travel_models.dart';
 import 'package:mini_projects/services/transfer_dispatch_service.dart';
 
 void main() {

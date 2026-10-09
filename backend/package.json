@@ -5,13 +5,19 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-neon-flight \"node --test rules-tests/firestore-rules.spec.js\""
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "better-sqlite3": "^12.2.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "firebase-admin": "^14.5.0",
     "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0"
   }
 }

@@ -1,17 +1,22 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../core/app_localizations.dart';
-import '../../models/entities.dart';
-import '../../widgets/app_widgets.dart';
+import '../../models/travel_models.dart';
+import '../../services/road_distance_service.dart';
+import '../../widgets/common_widgets.dart';
 
 typedef GpsLocationLoader = Future<GpsLocationEntity> Function();
 typedef TransferBookingCallback =
     FutureOr<void> Function(TransferBookingEntity booking);
 
 const double _transferServiceRadiusKm = 20;
+
+/// Beyond this straight-line distance no road route is requested.
+const double _routingLimitKm = 200;
 
 class AirportTransferSection extends StatefulWidget {
   const AirportTransferSection({
@@ -45,6 +50,11 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
   bool locating = false;
   String? locationErrorKey;
 
+  /// Driving route for [currentLocation]; null until OSRM answers or when
+  /// it can't (then the straight-line distance is shown instead).
+  RoadRoute? road;
+  bool routing = false;
+
   String get languageCode => widget.languageCode;
   String get departureAirportCode => widget.departureAirportCode;
 
@@ -56,6 +66,9 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     super.initState();
     reservation = widget.initialReservation;
     currentLocation = reservation?.pickupLocation;
+    if (currentLocation != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refreshRoad());
+    }
   }
 
   _TransferLocation? get _departureLocation {
@@ -73,6 +86,8 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
       reservation = widget.initialReservation;
       currentLocation = reservation?.pickupLocation;
       locationErrorKey = null;
+      road = null;
+      _refreshRoad();
     } else if (oldWidget.initialReservation?.id !=
         widget.initialReservation?.id) {
       reservation = widget.initialReservation;
@@ -101,6 +116,37 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
           airport.longitude,
         ) /
         1000;
+  }
+
+  /// Road distance when known, otherwise the straight line.
+  double _effectiveDistanceKm(
+    _TransferLocation airport,
+    GpsLocationEntity location,
+  ) => road?.distanceKm ?? _distanceToAirportKm(airport, location);
+
+  /// Looks up the driving route from [currentLocation] to the airport.
+  Future<void> _refreshRoad() async {
+    final from = currentLocation;
+    final airport = _departureLocation;
+    if (from == null || airport == null) return;
+    // No point routing from another country (e.g. the emulator's default
+    // Googleplex fix); the service-area check fails either way.
+    if (_distanceToAirportKm(airport, from) > _routingLimitKm) {
+      if (mounted) setState(() => road = null);
+      return;
+    }
+    if (mounted) setState(() => routing = true);
+    final route = await RoadDistanceService.drive(
+      fromLat: from.latitude,
+      fromLng: from.longitude,
+      toLat: airport.latitude,
+      toLng: airport.longitude,
+    );
+    if (!mounted || currentLocation != from) return;
+    setState(() {
+      road = route;
+      routing = false;
+    });
   }
 
   Future<GpsLocationEntity> _loadGpsLocation() async {
@@ -146,8 +192,10 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
       if (!mounted) return null;
       setState(() {
         currentLocation = location;
+        road = null;
         locating = false;
       });
+      await _refreshRoad();
       return location;
     } on _GpsLocationException catch (error) {
       if (!mounted) return null;
@@ -193,7 +241,9 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
       return;
     }
 
-    final distanceToAirportKm = _distanceToAirportKm(location, pickupLocation);
+    if (road == null && !routing) await _refreshRoad();
+    if (!context.mounted) return;
+    final distanceToAirportKm = _effectiveDistanceKm(location, pickupLocation);
     if (distanceToAirportKm > _transferServiceRadiusKm) {
       setState(() {
         locationErrorKey = 'gps_outside_service_area';
@@ -256,6 +306,43 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     );
   }
 
+  bool _looksLikeAndroidEmulatorDefault(GpsLocationEntity location) {
+    // Android Emulator commonly starts at Googleplex:
+    // 37.4219983, -122.084. This is not a distance-calculation bug.
+    return (location.latitude - 37.4219983).abs() < 0.02 &&
+        (location.longitude - (-122.084)).abs() < 0.02;
+  }
+
+  void _useAirportTestLocation(_TransferLocation airport) {
+    if (!kDebugMode) return;
+    setState(() {
+      // A small offset from the airport keeps the test inside the 20 km zone
+      // while avoiding an unrealistic exact 0.0 km distance.
+      currentLocation = GpsLocationEntity(
+        latitude: airport.latitude + 0.018,
+        longitude: airport.longitude + 0.012,
+        accuracyMeters: 8,
+      );
+      road = null;
+      locationErrorKey = null;
+    });
+    _refreshRoad();
+  }
+
+  String _distanceLabel(double distanceKm) {
+    if (distanceKm < 1) {
+      return '${(distanceKm * 1000).round()} m';
+    }
+    if (distanceKm >= 1000) {
+      final whole = distanceKm.round().toString().replaceAllMapped(
+        RegExp(r'\B(?=(\d{3})+(?!\d))'),
+        (_) => ',',
+      );
+      return '$whole km';
+    }
+    return '${distanceKm.toStringAsFixed(1)} km';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -265,10 +352,16 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     final availableCount = _availableVehicles(location).length;
     final distanceToAirportKm = currentLocation == null
         ? null
-        : _distanceToAirportKm(location, currentLocation!);
+        : _effectiveDistanceKm(location, currentLocation!);
     final isWithinServiceArea =
         distanceToAirportKm == null ||
         distanceToAirportKm <= _transferServiceRadiusKm;
+    final emulatorDefault =
+        currentLocation != null &&
+        _looksLikeAndroidEmulatorDefault(currentLocation!);
+
+    final primary = theme.colorScheme.primary;
+    final surface = theme.colorScheme.surface;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,205 +371,510 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
           icon: Icons.airport_shuttle_rounded,
         ),
         const SizedBox(height: 12),
-        Card(
-          clipBehavior: Clip.antiAlias,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  theme.colorScheme.primaryContainer.withValues(alpha: .65),
-                  theme.colorScheme.tertiaryContainer.withValues(alpha: .45),
-                ],
-              ),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: .55),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .06),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface.withValues(alpha: .85),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        Icons.local_taxi_rounded,
-                        color: theme.colorScheme.primary,
-                        size: 29,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            tr(languageCode, 'airport_transfer'),
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            tr(languageCode, 'transfer_subtitle'),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Chip(
-                    avatar: const Icon(Icons.flight_takeoff_rounded, size: 18),
-                    label: Text(location.code),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _PickupSummary(
-                  airport: _localized(location.nameEn, location.nameTh),
-                  pickup: currentLocation == null
-                      ? tr(languageCode, 'gps_location_not_set')
-                      : _gpsLocationText(currentLocation!, languageCode),
-                  availableCount: availableCount,
-                  languageCode: languageCode,
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
+                // Header
+                Container(
                   width: double.infinity,
-                  child: OutlinedButton.icon(
-                    key: const ValueKey('locate-airport-transfer'),
-                    onPressed: reservation == null && !locating
-                        ? _locateCurrentPosition
-                        : null,
-                    icon: locating
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.my_location_rounded),
-                    label: Text(
-                      tr(
-                        languageCode,
-                        locating
-                            ? 'gps_locating'
-                            : currentLocation == null
-                            ? 'gps_use_current_location'
-                            : 'gps_refresh_location',
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        primary.withValues(alpha: .95),
+                        theme.colorScheme.secondary.withValues(alpha: .78),
+                      ],
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .16),
+                          borderRadius: BorderRadius.circular(17),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .22),
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.local_taxi_rounded,
+                          color: Colors.white,
+                          size: 29,
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-                if (distanceToAirportKm != null) ...[
-                  const SizedBox(height: 8),
-                  _ServiceAreaStatus(
-                    distanceToAirportKm: distanceToAirportKm,
-                    isWithinServiceArea: isWithinServiceArea,
-                    languageCode: languageCode,
-                  ),
-                ],
-                if (locationErrorKey != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      tr(languageCode, locationErrorKey!),
-                      key: const ValueKey('gps-location-error'),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.error,
-                      ),
-                    ),
-                  ),
-                if (reservation != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              Icons.lock_rounded,
-                              color: theme.colorScheme.secondary,
+                            Text(
+                              tr(languageCode, 'airport_transfer'),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                tr(languageCode, 'transfer_locked'),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                ),
+                            const SizedBox(height: 3),
+                            Text(
+                              tr(languageCode, 'transfer_subtitle'),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.white.withValues(alpha: .86),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${tr(languageCode, 'gps_current_location')}: '
-                          '${_gpsLocationText(reservation!.pickupLocation, languageCode)}',
-                        ),
-                        Text(
-                          '${tr(languageCode, 'transfer_pickup_time')}: '
-                          '${dateOf(reservation!.pickupTime)} · '
-                          '${timeOf(reservation!.pickupTime)}',
-                        ),
-                        Text(
-                          '${tr(languageCode, 'transfer_flight_departure')}: '
-                          '${dateOf(reservation!.flightDepartureTime)} · '
-                          '${timeOf(reservation!.flightDepartureTime)}',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    key: const ValueKey('book-airport-transfer'),
-                    onPressed:
-                        reservation == null &&
-                            availableCount > 0 &&
-                            !locating &&
-                            isWithinServiceArea
-                        ? () => _scheduleTransfer(context, location)
-                        : null,
-                    icon: const Icon(Icons.event_available_rounded),
-                    label: Text(
-                      tr(
-                        languageCode,
-                        reservation == null
-                            ? 'transfer_schedule'
-                            : 'transfer_locked',
                       ),
-                    ),
+                    ],
                   ),
                 ),
-                if (reservation == null && widget.flightDepartureTime != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 7),
-                    child: Text(
-                      tr(languageCode, 'transfer_auto_pickup'),
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall,
-                    ),
+
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Airport + available cars
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 11,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: primary.withValues(alpha: .10),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.flight_takeoff_rounded,
+                                  size: 17,
+                                  color: primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  location.code,
+                                  style: TextStyle(
+                                    color: primary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: .10),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              '${tr(languageCode, 'transfer_available_remaining')} '
+                              '$availableCount ${tr(languageCode, 'cars')}',
+                              key: const ValueKey('transfer-available-count'),
+                              style: const TextStyle(
+                                color: Colors.green,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      Text(
+                        _localized(location.nameEn, location.nameTh),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.location_on_rounded,
+                            size: 18,
+                            color: primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              currentLocation == null
+                                  ? tr(languageCode, 'gps_location_not_set')
+                                  : _gpsLocationText(
+                                      currentLocation!,
+                                      languageCode,
+                                    ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      if (emulatorDefault && kDebugMode) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.amber.withValues(alpha: .45),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.developer_mode_rounded,
+                                color: Colors.orange,
+                                size: 21,
+                              ),
+                              const SizedBox(width: 9),
+                              Expanded(
+                                child: Text(
+                                  _localized(
+                                    'The emulator is using the default Googleplex GPS location. '
+                                        'That is why the distance is thousands of kilometers.',
+                                    'Emulator กำลังใช้พิกัดเริ่มต้น Googleplex '
+                                        '(37.421998, -122.084000) จึงทำให้ระยะทางเป็นหลักหมื่นกิโลเมตร '
+                                        'ไม่ใช่สูตรคำนวณระยะทางผิด',
+                                  ),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      if (distanceToAirportKm != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          key: const ValueKey('transfer-service-area-status'),
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: isWithinServiceArea
+                                ? Colors.green.withValues(alpha: .08)
+                                : theme.colorScheme.error.withValues(
+                                    alpha: .07,
+                                  ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isWithinServiceArea
+                                  ? Colors.green.withValues(alpha: .28)
+                                  : theme.colorScheme.error.withValues(
+                                      alpha: .25,
+                                    ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: isWithinServiceArea
+                                      ? Colors.green.withValues(alpha: .13)
+                                      : theme.colorScheme.error.withValues(
+                                          alpha: .12,
+                                        ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  isWithinServiceArea
+                                      ? Icons.check_rounded
+                                      : Icons.close_rounded,
+                                  color: isWithinServiceArea
+                                      ? Colors.green
+                                      : theme.colorScheme.error,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      tr(
+                                        languageCode,
+                                        isWithinServiceArea
+                                            ? 'gps_within_service_area'
+                                            : 'gps_outside_service_area',
+                                      ),
+                                      style: TextStyle(
+                                        color: isWithinServiceArea
+                                            ? Colors.green.shade700
+                                            : theme.colorScheme.error,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      routing
+                                          ? tr(
+                                              languageCode,
+                                              'route_calculating',
+                                            )
+                                          : road != null
+                                          ? trArgs(
+                                              languageCode,
+                                              'road_distance',
+                                              {
+                                                'km': _distanceLabel(
+                                                  road!.distanceKm,
+                                                ),
+                                                'min':
+                                                    '${road!.duration.inMinutes.clamp(1, 999)}',
+                                              },
+                                            )
+                                          : trArgs(
+                                              languageCode,
+                                              distanceToAirportKm >
+                                                      _routingLimitKm
+                                                  ? 'straight_distance_far'
+                                                  : 'straight_distance',
+                                              {
+                                                'km': _distanceLabel(
+                                                  distanceToAirportKm,
+                                                ),
+                                              },
+                                            ),
+                                      key: const ValueKey(
+                                        'transfer-distance-label',
+                                      ),
+                                      style: theme.textTheme.bodySmall,
+                                    ),
+                                    Text(
+                                      road != null
+                                          ? '${tr(languageCode, 'service_radius_road')} · OSRM © OpenStreetMap'
+                                          : tr(
+                                              languageCode,
+                                              'service_radius_road',
+                                            ),
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 14),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              key: const ValueKey('locate-airport-transfer'),
+                              onPressed: reservation == null && !locating
+                                  ? _locateCurrentPosition
+                                  : null,
+                              icon: locating
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.my_location_rounded),
+                              label: Text(
+                                tr(
+                                  languageCode,
+                                  locating
+                                      ? 'gps_locating'
+                                      : currentLocation == null
+                                      ? 'gps_use_current_location'
+                                      : 'gps_refresh_location',
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(0, 50),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      if (kDebugMode && emulatorDefault) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton.icon(
+                            onPressed: () => _useAirportTestLocation(location),
+                            icon: const Icon(Icons.science_rounded),
+                            label: Text(
+                              _localized(
+                                'Use airport test location',
+                                'ใช้ตำแหน่งทดสอบใกล้สนามบิน',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      if (locationErrorKey != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          tr(languageCode, locationErrorKey!),
+                          key: const ValueKey('gps-location-error'),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.error,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+
+                      if (reservation != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.secondaryContainer
+                                .withValues(alpha: .65),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.verified_rounded,
+                                    color: theme.colorScheme.secondary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      tr(languageCode, 'transfer_locked'),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 9),
+                              Text(
+                                '${tr(languageCode, 'transfer_pickup_time')}: '
+                                '${dateOf(reservation!.pickupTime)} · '
+                                '${timeOf(reservation!.pickupTime)}',
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${tr(languageCode, 'transfer_flight_departure')}: '
+                                '${dateOf(reservation!.flightDepartureTime)} · '
+                                '${timeOf(reservation!.flightDepartureTime)}',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 16),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: FilledButton.icon(
+                          key: const ValueKey('book-airport-transfer'),
+                          onPressed:
+                              reservation == null &&
+                                  availableCount > 0 &&
+                                  !locating &&
+                                  isWithinServiceArea
+                              ? () => _scheduleTransfer(context, location)
+                              : null,
+                          icon: Icon(
+                            reservation == null
+                                ? Icons.event_available_rounded
+                                : Icons.lock_rounded,
+                          ),
+                          label: Text(
+                            tr(
+                              languageCode,
+                              reservation == null
+                                  ? 'transfer_schedule'
+                                  : 'transfer_locked',
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      if (reservation == null &&
+                          widget.flightDepartureTime != null) ...[
+                        const SizedBox(height: 9),
+                        Center(
+                          child: Text(
+                            tr(languageCode, 'transfer_auto_pickup'),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
+                ),
               ],
             ),
           ),
@@ -497,140 +895,6 @@ class _GpsLocationException implements Exception {
   const _GpsLocationException(this.messageKey);
 
   final String messageKey;
-}
-
-class _ServiceAreaStatus extends StatelessWidget {
-  const _ServiceAreaStatus({
-    required this.distanceToAirportKm,
-    required this.isWithinServiceArea,
-    required this.languageCode,
-  });
-
-  final double distanceToAirportKm;
-  final bool isWithinServiceArea;
-  final String languageCode;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = isWithinServiceArea ? Colors.green : theme.colorScheme.error;
-    return Container(
-      key: const ValueKey('transfer-service-area-status'),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: .35)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isWithinServiceArea
-                ? Icons.check_circle_rounded
-                : Icons.cancel_rounded,
-            size: 20,
-            color: color,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tr(
-                    languageCode,
-                    isWithinServiceArea
-                        ? 'gps_within_service_area'
-                        : 'gps_outside_service_area',
-                  ),
-                  style: TextStyle(color: color, fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  '${tr(languageCode, 'gps_distance_from_airport')}: '
-                  '${distanceToAirportKm.toStringAsFixed(1)} km · '
-                  '${tr(languageCode, 'transfer_service_radius')}',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PickupSummary extends StatelessWidget {
-  const _PickupSummary({
-    required this.airport,
-    required this.pickup,
-    required this.availableCount,
-    required this.languageCode,
-  });
-
-  final String airport;
-  final String pickup;
-  final int availableCount;
-  final String languageCode;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: .82),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.location_on_rounded, color: theme.colorScheme.primary),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  airport,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  '${tr(languageCode, 'gps_current_location')}: $pickup',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: .12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '${tr(languageCode, 'transfer_available_remaining')} '
-              '$availableCount '
-              '${tr(languageCode, 'cars')}',
-              key: const ValueKey('transfer-available-count'),
-              style: const TextStyle(
-                color: Colors.green,
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 enum _TransferStatus { available, pickingUp, droppingOff, unavailable }

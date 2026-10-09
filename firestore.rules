@@ -1,0 +1,176 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read, create, update, delete: if ownsUser(userId);
+
+      match /savedPassengers/{passengerId} {
+        allow read, create, update, delete: if ownsUser(userId);
+      }
+
+      // Only sanitized display metadata is allowed here.
+      // Never store PAN/full card, CVV, PIN, OTP, bank password,
+      // bank account number, or payer PromptPay ID.
+      match /paymentMethods/{methodId} {
+        allow read, delete: if ownsUser(userId);
+
+        allow create, update:
+          if ownsUser(userId)
+          && request.resource.data.keys().hasOnly([
+            'id',
+            'type',
+            'label',
+            'detail',
+            'isDefault',
+            'updatedAt'
+          ])
+          && request.resource.data.id == methodId
+          && request.resource.data.type in [
+            'promptPay',
+            'card',
+            'mobileBanking'
+          ]
+          && request.resource.data.label is string
+          && request.resource.data.detail is string
+          && request.resource.data.label.size() <= 40
+          && request.resource.data.detail.size() <= 60
+          && (!('isDefault' in request.resource.data) || request.resource.data.isDefault is bool)
+          && (
+            request.resource.data.type != 'promptPay'
+            || request.resource.data.detail == 'สแกน QR เพื่อชำระเงิน'
+          )
+          && (
+            request.resource.data.type != 'card'
+            || !request.resource.data.detail.matches('.*[0-9]{6,}.*')
+          )
+          && (
+            request.resource.data.type != 'mobileBanking'
+            || !request.resource.data.detail.matches('.*[0-9]{6,}.*')
+          );
+      }
+    }
+
+    match /bookings/{bookingId} {
+      // The app may only create an unpaid booking. Payment confirmation
+      // (paymentStatus 'paid', paidAt, ...) is written by
+      // backend/scripts/payments.js through the Admin SDK.
+      allow create:
+        if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.id == bookingId
+        && request.resource.data.status == 'upcoming'
+        && request.resource.data.paymentStatus == 'pending'
+        && !request.resource.data.keys().hasAny([
+          'paidAt',
+          'paymentConfirmedBy',
+          'ticketIssuedAt'
+        ])
+        && allSeatsLocked(request.resource.data);
+
+      allow read:
+        if signedIn()
+        && resource.data.userId == request.auth.uid;
+
+      // The only client change: the owner cancels an unpaid booking.
+      allow update:
+        if signedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.paymentStatus == 'pending'
+        && resource.data.status == 'upcoming'
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    // One lock per booked seat, written in the same batch as the booking.
+    // Locks are never updated, so the first booking to lock a seat wins.
+    // Only the server (backend/scripts/payments.js reject) deletes them.
+    function seatLock(flightKey, seat) {
+      return /databases/$(database)/documents/seatLocks/$(flightKey + '_' + seat);
+    }
+
+    function seatLockedAt(b, i) {
+      return b.seats.size() <= i || existsAfter(seatLock(b.flightKey, b.seats[i]));
+    }
+
+    // Rules have no loops; bookings are capped at 9 seats (9 passengers).
+    function allSeatsLocked(b) {
+      return b.flightKey is string
+        && b.seats is list
+        && b.seats.size() >= 1
+        && b.seats.size() <= 9
+        && seatLockedAt(b, 0) && seatLockedAt(b, 1) && seatLockedAt(b, 2)
+        && seatLockedAt(b, 3) && seatLockedAt(b, 4) && seatLockedAt(b, 5)
+        && seatLockedAt(b, 6) && seatLockedAt(b, 7) && seatLockedAt(b, 8);
+    }
+
+    match /seatLocks/{lockId} {
+      allow read: if true;
+
+      allow create:
+        if signedIn()
+        && request.resource.data.keys().hasOnly(['flightKey', 'seat', 'bookingId', 'createdAt'])
+        && lockId == request.resource.data.flightKey + '_' + request.resource.data.seat
+        && getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.userId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.flightKey == request.resource.data.flightKey
+        && request.resource.data.seat in getAfter(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.seats;
+
+      // Released together with cancelling the owner's booking (same batch).
+      allow delete:
+        if signedIn()
+        && getAfter(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.userId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.status == 'cancelled';
+
+      allow update: if false;
+    }
+
+    // Public E-ticket verification by exact, tokenized document ID.
+    // Only the server issues tickets, after payment is confirmed.
+    match /publicTickets/{ticketId} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if false;
+    }
+
+    // Public reference data, written only by backend/scripts/seed_firestore.js
+    // (Admin SDK bypasses these rules).
+    // Payment settings the app needs before checkout (the shop's PromptPay
+    // receiving number appears in every payment QR anyway). Written only
+    // from the admin page via the Admin SDK.
+    match /appConfig/{name} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /airports/{code} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /airlines/{code} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /airportStats/{code} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
