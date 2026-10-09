@@ -15,6 +15,7 @@ class PassengerScreen extends StatefulWidget {
     required this.flight,
     required this.cabinClass,
     this.returnFlight,
+    @visibleForTesting this.debugSavedPassengers,
   });
 
   final FlightEntity flight;
@@ -22,6 +23,9 @@ class PassengerScreen extends StatefulWidget {
 
   /// Round trip: the return leg, booked after seats are chosen for both legs.
   final FlightEntity? returnFlight;
+
+  /// Screenshot tests: saved passengers to show without Firebase.
+  final List<PassengerEntity>? debugSavedPassengers;
 
   @override
   State<PassengerScreen> createState() => _PassengerScreenState();
@@ -31,7 +35,7 @@ class _PassengerScreenState extends State<PassengerScreen> {
   final _form = GlobalKey<FormState>();
   late List<_PassengerFormData> forms;
 
-  List<PassengerEntity> savedPassengers = const [];
+  late List<PassengerEntity> savedPassengers = widget.debugSavedPassengers ?? const [];
   bool loadingSaved = true;
   bool _loadedOnce = false;
 
@@ -352,15 +356,24 @@ class _PassengerFormState extends State<_PassengerForm> {
                 )
                     ? d.selectedPassport
                     : null,
-                decoration: const InputDecoration(
-                  labelText: 'ใช้ข้อมูลผู้โดยสารที่บันทึกไว้',
-                  prefixIcon: Icon(Icons.person_search_outlined),
+                // isExpanded lets long names ellipsize instead of
+                // overflowing the field on narrow phones.
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: tr(l, 'use_saved_passenger'),
+                  prefixIcon: const Icon(Icons.person_search_outlined),
                 ),
-                hint: const Text('เลือกผู้โดยสาร'),
+                hint: Text(
+                  tr(l, 'choose_passenger'),
+                  overflow: TextOverflow.ellipsis,
+                ),
                 items: [
-                  const DropdownMenuItem<String>(
+                  DropdownMenuItem<String>(
                     value: '__new__',
-                    child: Text('กรอกผู้โดยสารใหม่'),
+                    child: Text(
+                      tr(l, 'new_passenger'),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   ...widget.savedPassengers.map(
                     (passenger) => DropdownMenuItem<String>(
@@ -391,6 +404,7 @@ class _PassengerFormState extends State<_PassengerForm> {
             ],
 
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: d.title,
               decoration: InputDecoration(
                 labelText: tr(l, 'title'),
@@ -532,12 +546,8 @@ class _PassengerFormState extends State<_PassengerForm> {
               contentPadding: EdgeInsets.zero,
               value: d.saveForNextTime,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text(
-                'บันทึกข้อมูลผู้โดยสารไว้ใช้ครั้งหน้า',
-              ),
-              subtitle: const Text(
-                'ครั้งต่อไปเลือกชื่อแล้วระบบจะกรอกข้อมูลให้อัตโนมัติ',
-              ),
+              title: Text(tr(l, 'save_passenger_next_time')),
+              subtitle: Text(tr(l, 'save_passenger_next_time_sub')),
               onChanged: (value) {
                 setState(() {
                   d.saveForNextTime = value ?? true;

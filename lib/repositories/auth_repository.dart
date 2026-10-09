@@ -30,11 +30,11 @@ class FirebaseAuthRepository implements AuthRepository {
     final normalizedEmail = email.trim().toLowerCase();
 
     if (normalizedEmail.isEmpty) {
-      throw Exception('กรุณากรอกอีเมล');
+      throw Exception('auth_err_email_required');
     }
 
     if (password.isEmpty) {
-      throw Exception('กรุณากรอกรหัสผ่าน');
+      throw Exception('auth_err_password_required');
     }
 
     try {
@@ -47,7 +47,7 @@ class FirebaseAuthRepository implements AuthRepository {
       final user = credential.user;
 
       if (user == null) {
-        throw Exception('ไม่พบข้อมูลผู้ใช้');
+        throw Exception('auth_err_user_missing');
       }
 
       return _entity(user);
@@ -66,15 +66,15 @@ class FirebaseAuthRepository implements AuthRepository {
     final normalizedEmail = email.trim().toLowerCase();
 
     if (normalizedName.isEmpty) {
-      throw Exception('กรุณากรอกชื่อ');
+      throw Exception('auth_err_name_required');
     }
 
     if (normalizedEmail.isEmpty) {
-      throw Exception('กรุณากรอกอีเมล');
+      throw Exception('auth_err_email_required');
     }
 
     if (password.length < 6) {
-      throw Exception('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+      throw Exception('auth_err_password_short');
     }
 
     try {
@@ -87,7 +87,7 @@ class FirebaseAuthRepository implements AuthRepository {
       final user = credential.user;
 
       if (user == null) {
-        throw Exception('สร้างบัญชีไม่สำเร็จ');
+        throw Exception('auth_err_register_failed');
       }
 
       await user.updateDisplayName(normalizedName);
@@ -107,11 +107,11 @@ class FirebaseAuthRepository implements AuthRepository {
     final normalizedEmail = email.trim().toLowerCase();
 
     if (normalizedEmail.isEmpty) {
-      throw Exception('กรุณากรอกอีเมล');
+      throw Exception('auth_err_email_required');
     }
 
     if (!_looksLikeEmail(normalizedEmail)) {
-      throw Exception('รูปแบบอีเมลไม่ถูกต้อง');
+      throw Exception('auth_err_email_invalid');
     }
 
     try {
@@ -146,36 +146,38 @@ class FirebaseAuthRepository implements AuthRepository {
     );
   }
 
+  /// Translation key for [error] (screens pass it through `tr`); unknown
+  /// codes fall back to Firebase's own message, which `tr` shows as is.
   String _message(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-email':
-        return 'รูปแบบอีเมลไม่ถูกต้อง';
+        return 'auth_err_email_invalid';
 
       case 'invalid-credential':
       case 'wrong-password':
       case 'user-not-found':
-        return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+        return 'auth_err_wrong_credentials';
 
       case 'email-already-in-use':
-        return 'อีเมลนี้ถูกใช้งานแล้ว';
+        return 'auth_err_email_in_use';
 
       case 'weak-password':
-        return 'รหัสผ่านไม่ปลอดภัยเพียงพอ';
+        return 'auth_err_weak_password';
 
       case 'too-many-requests':
-        return 'มีการร้องขอมากเกินไป กรุณาลองใหม่ภายหลัง';
+        return 'auth_err_too_many';
 
       case 'network-request-failed':
-        return 'ไม่สามารถเชื่อมต่อ Firebase ได้ กรุณาตรวจสอบอินเทอร์เน็ต';
+        return 'auth_err_network';
 
       case 'operation-not-allowed':
-        return 'ยังไม่ได้เปิด Email/Password ใน Firebase Authentication';
+        return 'auth_err_not_enabled';
 
       case 'missing-email':
-        return 'กรุณากรอกอีเมล';
+        return 'auth_err_email_required';
 
       default:
-        return error.message ?? 'เกิดข้อผิดพลาดในการยืนยันตัวตน';
+        return error.message ?? 'auth_err_generic';
     }
   }
 }

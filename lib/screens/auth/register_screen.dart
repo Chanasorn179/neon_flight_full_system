@@ -40,22 +40,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final userPassword = password.text;
 
     if (displayName.isEmpty || userEmail.isEmpty || userPassword.isEmpty) {
-      _showMessage('กรุณากรอกข้อมูลให้ครบ');
+      _showMessage('auth_err_fill_all');
       return;
     }
 
     if (userPassword.length < 6) {
-      _showMessage('Password ต้องมีอย่างน้อย 6 ตัวอักษร');
+      _showMessage('auth_err_password_short');
       return;
     }
 
     if (userPassword != confirmPassword.text) {
-      _showMessage('Password และยืนยัน Password ไม่ตรงกัน');
+      _showMessage('auth_err_password_mismatch');
       return;
     }
 
     if (!_acceptedTerms) {
-      _showMessage('กรุณายอมรับเงื่อนไขการใช้งานก่อนสมัครสมาชิก');
+      _showMessage('auth_err_accept_terms');
       return;
     }
 
@@ -69,14 +69,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    _showMessage(auth.error ?? 'Register failed');
+    _showMessage(auth.error ?? 'auth_err_register_failed');
   }
 
-  void _showMessage(String message) {
+  /// [key] is a translation key (or a raw Firebase message, shown as is).
+  void _showMessage(String key) {
     if (!mounted) return;
+    final lang = context.read<LanguageProvider>().languageCode;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(SnackBar(content: Text(tr(lang, key))));
   }
 
   @override
@@ -129,9 +131,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 7),
                       Text(
-                        lang == 'th'
-                            ? 'สร้างบัญชี Neon Flight เพื่อจองและจัดการทุกการเดินทางของคุณ'
-                            : 'Create your Neon Flight account and manage every trip in one place',
+                        tr(lang, 'register_tagline'),
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colors.onSurfaceVariant,
@@ -169,7 +169,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               controller: name,
                               textInputAction: TextInputAction.next,
                               decoration: InputDecoration(
-                                hintText: lang == 'th' ? 'ชื่อและนามสกุล' : 'Full name',
+                                hintText: tr(lang, 'full_name_hint'),
                                 prefixIcon: const Icon(Icons.badge_outlined),
                               ),
                             ),
@@ -204,7 +204,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 hintText: '••••••••',
                                 prefixIcon: const Icon(Icons.password_rounded),
                                 suffixIcon: IconButton(
-                                  tooltip: _obscurePassword ? 'แสดงรหัสผ่าน' : 'ซ่อนรหัสผ่าน',
+                                  tooltip: tr(lang, _obscurePassword ? 'show_password' : 'hide_password'),
                                   onPressed: () {
                                     setState(() {
                                       _obscurePassword = !_obscurePassword;
@@ -221,7 +221,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             const SizedBox(height: 16),
                             _FieldCaption(
                               icon: Icons.verified_user_outlined,
-                              text: lang == 'th' ? 'ยืนยัน Password' : 'Confirm password',
+                              text: tr(lang, 'confirm_password'),
                             ),
                             const SizedBox(height: 8),
                             TextField(
@@ -236,7 +236,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 hintText: '••••••••',
                                 prefixIcon: const Icon(Icons.lock_reset_rounded),
                                 suffixIcon: IconButton(
-                                  tooltip: _obscureConfirm ? 'แสดงรหัสผ่าน' : 'ซ่อนรหัสผ่าน',
+                                  tooltip: tr(lang, _obscureConfirm ? 'show_password' : 'hide_password'),
                                   onPressed: () {
                                     setState(() {
                                       _obscureConfirm = !_obscureConfirm;
@@ -276,9 +276,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       child: Padding(
                                         padding: const EdgeInsets.only(top: 10),
                                         child: Text(
-                                          lang == 'th'
-                                              ? 'ฉันยอมรับเงื่อนไขการใช้งานและนโยบายความเป็นส่วนตัว'
-                                              : 'I agree to the Terms of Use and Privacy Policy',
+                                          tr(lang, 'accept_terms'),
                                           style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
                                         ),
                                       ),
@@ -296,7 +294,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: Text(
-                                  auth.error!,
+                                  tr(lang, auth.error!),
                                   style: TextStyle(color: colors.error),
                                 ),
                               ),
@@ -313,11 +311,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               label: Text(tr(lang, 'register')),
                             ),
                             const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
                                 Text(
-                                  lang == 'th' ? 'มีบัญชีอยู่แล้ว?' : 'Already have an account?',
+                                  tr(lang, 'have_account'),
                                   style: theme.textTheme.bodyMedium,
                                 ),
                                 TextButton(

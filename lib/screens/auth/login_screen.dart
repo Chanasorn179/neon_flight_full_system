@@ -15,6 +15,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  String get _lang => context.read<LanguageProvider>().languageCode;
+
   final email = TextEditingController();
   final password = TextEditingController();
 
@@ -36,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted || ok) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(auth.error ?? 'เข้าสู่ระบบไม่สำเร็จ')),
+      SnackBar(content: Text(tr(_lang, auth.error ?? 'auth_err_login_failed'))),
     );
   }
 
@@ -65,7 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'ส่งลิงก์รีเซ็ตรหัสผ่านไปที่ $selectedEmail แล้ว กรุณาตรวจสอบ Inbox หรือ Spam/Junk',
+            trArgs(_lang, 'reset_link_sent', {'email': selectedEmail}),
           ),
         ),
       );
@@ -73,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     messenger.showSnackBar(
-      SnackBar(content: Text(auth.error ?? 'ไม่สามารถส่งลิงก์รีเซ็ตรหัสผ่านได้')),
+      SnackBar(content: Text(tr(_lang, auth.error ?? 'auth_err_reset_failed'))),
     );
   }
 
@@ -196,7 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            'เข้าสู่ระบบเพื่อจองเที่ยวบิน จัดการตั๋ว และติดตามบริการรับส่ง',
+                                            tr(lang, 'login_card_body'),
                                             style: theme.textTheme.bodySmall?.copyWith(
                                               color: Colors.white.withValues(alpha: .86),
                                               height: 1.35,
@@ -244,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   hintText: '••••••••',
                                   prefixIcon: Icons.password_rounded,
                                   suffixIcon: IconButton(
-                                    tooltip: _obscurePassword ? 'แสดงรหัสผ่าน' : 'ซ่อนรหัสผ่าน',
+                                    tooltip: tr(lang, _obscurePassword ? 'show_password' : 'hide_password'),
                                     onPressed: () {
                                       setState(() {
                                         _obscurePassword = !_obscurePassword;
@@ -316,7 +318,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          auth.error!,
+                                          tr(lang, auth.error!),
                                           style: TextStyle(color: theme.colorScheme.error),
                                         ),
                                       ),
@@ -506,6 +508,8 @@ class _ForgotPasswordDialog extends StatefulWidget {
 }
 
 class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  String get _lang => context.read<LanguageProvider>().languageCode;
+
   late final TextEditingController _controller;
   String? _errorText;
 
@@ -530,14 +534,14 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
 
     if (value.isEmpty) {
       setState(() {
-        _errorText = 'กรุณากรอกอีเมล';
+        _errorText = tr(_lang, 'auth_err_email_required');
       });
       return;
     }
 
     if (!_looksLikeEmail(value)) {
       setState(() {
-        _errorText = 'รูปแบบอีเมลไม่ถูกต้อง';
+        _errorText = tr(_lang, 'auth_err_email_invalid');
       });
       return;
     }
@@ -549,16 +553,14 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: const Text('ลืมรหัสผ่าน'),
+      title: Text(tr(_lang, 'forgot_password_title')),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'กรอกอีเมลที่ใช้สมัคร Neon Flight ระบบจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปยังอีเมลนั้น',
-            ),
+            Text(tr(_lang, 'forgot_password_body')),
             const SizedBox(height: 18),
             TextField(
               controller: _controller,
@@ -585,12 +587,12 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('ยกเลิก'),
+          child: Text(tr(_lang, 'cancel')),
         ),
         FilledButton.icon(
           onPressed: _submit,
           icon: const Icon(Icons.send_outlined),
-          label: const Text('ส่งลิงก์รีเซ็ต'),
+          label: Text(tr(_lang, 'send_reset_link')),
         ),
       ],
     );

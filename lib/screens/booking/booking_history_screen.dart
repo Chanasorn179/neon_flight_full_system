@@ -858,41 +858,20 @@ Color _transferPhaseColor(
   };
 }
 
-String _transferPhaseTitle(String lang, _TransferPhase phase) {
-  if (lang == 'th') {
-    return switch (phase) {
-      _TransferPhase.scheduled => 'จองรถเรียบร้อย',
-      _TransferPhase.driverOnWay => 'คนขับกำลังไปรับ',
-      _TransferPhase.onTheWay => 'กำลังเดินทางไปสนามบิน',
-      _TransferPhase.arrived => 'ถึงสนามบินแล้ว',
-      _TransferPhase.cancelled => 'ยกเลิกรายการรับส่ง',
-    };
-  }
-  return switch (phase) {
-    _TransferPhase.scheduled => 'Transfer scheduled',
-    _TransferPhase.driverOnWay => 'Driver is on the way',
-    _TransferPhase.onTheWay => 'On the way to the airport',
-    _TransferPhase.arrived => 'Arrived at the airport',
-    _TransferPhase.cancelled => 'Transfer cancelled',
-  };
-}
+String _transferPhaseTitle(String lang, _TransferPhase phase) => tr(lang, switch (phase) {
+  _TransferPhase.scheduled => 'transfer_phase_scheduled',
+  _TransferPhase.driverOnWay => 'transfer_phase_driver',
+  _TransferPhase.onTheWay => 'transfer_phase_route',
+  _TransferPhase.arrived => 'transfer_phase_arrived',
+  _TransferPhase.cancelled => 'transfer_phase_cancelled',
+});
 
-String _transferStepLabel(String lang, int step) {
-  if (lang == 'th') {
-    return switch (step) {
-      0 => 'จองแล้ว',
-      1 => 'ไปรับ',
-      2 => 'เดินทาง',
-      _ => 'ถึงแล้ว',
-    };
-  }
-  return switch (step) {
-    0 => 'Booked',
-    1 => 'Pickup',
-    2 => 'On route',
-    _ => 'Arrived',
-  };
-}
+String _transferStepLabel(String lang, int step) => tr(lang, switch (step) {
+  0 => 'transfer_step_booked',
+  1 => 'transfer_step_pickup',
+  2 => 'transfer_step_route',
+  _ => 'transfer_step_arrived',
+});
 
 String _cabin(String lang, CabinClass c) => switch (c) {
   CabinClass.economy => tr(lang, 'economy'),

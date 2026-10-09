@@ -26,7 +26,9 @@ import 'package:mini_projects/repositories/auth_repository.dart';
 import 'package:mini_projects/repositories/booking_repository.dart';
 import 'package:mini_projects/repositories/flight_repository.dart';
 import 'package:mini_projects/screens/auth/login_screen.dart';
+import 'package:mini_projects/screens/auth/register_screen.dart';
 import 'package:mini_projects/screens/booking/booking_history_screen.dart';
+import 'package:mini_projects/screens/booking/passenger_screen.dart';
 import 'package:mini_projects/screens/booking/payment_screen.dart';
 import 'package:mini_projects/screens/booking/seat_selection_screen.dart';
 import 'package:mini_projects/screens/booking/takeoff_screen.dart';
@@ -41,6 +43,9 @@ import 'package:shared_preferences_platform_interface/in_memory_shared_preferenc
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 const _phone = Size(390, 844);
+
+/// Small Android phone; layout overflow fails the test here.
+const _narrow = Size(320, 640);
 
 Future<void> _loadFont(String family, List<String> paths) async {
   final loader = FontLoader(family);
@@ -119,6 +124,7 @@ void main() {
     Future<void> Function()? prepare,
     Future<void> Function(WidgetTester tester)? act,
     Size size = _phone,
+    String lang = 'th',
   }) async {
     for (final mode in [ThemeMode.light, ThemeMode.dark]) {
       await tester.binding.setSurfaceSize(size);
@@ -131,7 +137,7 @@ void main() {
         await flights.loadAirports();
         await prepare?.call();
       });
-      final languages = LanguageProvider();
+      final languages = LanguageProvider()..setLanguage(lang);
       // Fresh widget state for each theme (no carry-over between runs).
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(
@@ -177,6 +183,26 @@ void main() {
   }
 
   testWidgets('login', (t) => shoot(t, 'login', () => const LoginScreen(), loggedIn: false));
+  testWidgets('register_narrow', (t) => shoot(t, 'register_narrow', () => const RegisterScreen(), loggedIn: false, size: _narrow));
+  testWidgets('login_narrow_en', (t) => shoot(t, 'login_narrow_en', () => const LoginScreen(), loggedIn: false, size: _narrow, lang: 'en'));
+  for (final (name, size, lang) in [
+    ('passenger', _phone, 'th'),
+    ('passenger_narrow', _narrow, 'th'),
+    ('passenger_narrow_ja', _narrow, 'ja'),
+  ]) {
+    testWidgets(name, (t) => shoot(
+          t,
+          name,
+          () => PassengerScreen(
+            flight: flight,
+            cabinClass: CabinClass.economy,
+            debugSavedPassengers: [passenger],
+          ),
+          size: size,
+          lang: lang,
+        ));
+  }
+  testWidgets('home_narrow', (t) => shoot(t, 'home_narrow', () => const MainShell(), size: _narrow));
   testWidgets('home', (t) => shoot(t, 'home', () => const MainShell()));
   testWidgets('results', (t) => shoot(
         t,
