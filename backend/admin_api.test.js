@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const express = require('express');
 
-const { createAdminRouter } = require('./admin');
+const { createAdminRouter } = require('./admin_api');
 
 async function start(router, t) {
   const app = express();
@@ -91,7 +91,7 @@ test('admin API reads and validates the PromptPay settings', async (t) => {
 });
 
 test('PromptPay ID must be a mobile number or 13-digit ID', () => {
-  const { validatePaymentConfig } = require('./scripts/payments');
+  const { validatePaymentConfig } = require('./scripts/payment_admin');
   assert.deepEqual(validatePaymentConfig({ promptPayId: '081-234-5678' }), {
     promptPayId: '0812345678', merchantName: 'NEON FLIGHT',
   });

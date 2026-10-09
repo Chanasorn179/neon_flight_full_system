@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'app.dart';
-import 'data/mock_api.dart';
+import 'neon_flight_app.dart';
+import 'data/offline_mock_api.dart';
 import 'providers/auth_provider.dart';
 import 'providers/booking_provider.dart';
 import 'providers/flight_provider.dart';

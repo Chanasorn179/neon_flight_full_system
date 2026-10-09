@@ -9,13 +9,13 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
 import '../../data/thai_airlines.dart';
-import '../../models/entities.dart';
+import '../../models/travel_models.dart';
 import '../../providers/booking_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../services/firebase_service.dart';
 import '../../services/ticket_qr_service.dart';
 import '../../widgets/airline_logo.dart';
-import '../../widgets/app_widgets.dart';
+import '../../widgets/common_widgets.dart';
 import 'ticket_scanner_screen.dart';
 
 class TicketScreen extends StatefulWidget {

@@ -9,11 +9,11 @@
 // PowerShell (from backend/):
 //   $env:GOOGLE_APPLICATION_CREDENTIALS='C:\path\to\service-account.json'
 //   $env:TICKET_SIGNING_SECRET='...'   # only if the Flutter build uses one
-//   node scripts/payments.js list
-//   node scripts/payments.js confirm NF12345678
-//   node scripts/payments.js reject NF12345678
+//   node scripts/payment_admin.js list
+//   node scripts/payment_admin.js confirm NF12345678
+//   node scripts/payment_admin.js reject NF12345678
 //
-// The same functions back the admin web page (admin.js, /admin).
+// The same functions back the admin web page (admin_api.js, /admin).
 // A round trip is confirmed or rejected as a whole (both legs share tripId).
 
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
@@ -203,7 +203,7 @@ function adminDb() {
 async function main() {
   const [command, bookingId] = process.argv.slice(2);
   if (!['list', 'confirm', 'reject'].includes(command) || (command !== 'list' && !bookingId)) {
-    console.log('Usage: node scripts/payments.js list | confirm <bookingId> | reject <bookingId>');
+    console.log('Usage: node scripts/payment_admin.js list | confirm <bookingId> | reject <bookingId>');
     process.exit(1);
   }
   const db = adminDb();

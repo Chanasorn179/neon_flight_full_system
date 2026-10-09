@@ -7,7 +7,7 @@ import 'providers/auth_provider.dart';
 import 'providers/language_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/home/main_shell.dart';
+import 'screens/home/bottom_nav_shell.dart';
 
 class NeonFlightApp extends StatelessWidget {
   const NeonFlightApp({super.key});

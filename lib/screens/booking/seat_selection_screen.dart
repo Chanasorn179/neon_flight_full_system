@@ -6,13 +6,13 @@ import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
 import '../../core/theme.dart';
-import '../../models/entities.dart';
+import '../../models/travel_models.dart';
 import '../../providers/booking_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../widgets/airline_logo.dart';
-import '../../widgets/app_widgets.dart';
+import '../../widgets/common_widgets.dart';
 import 'payment_screen.dart';
-import 'takeoff_screen.dart';
+import 'takeoff_animation_screen.dart';
 
 class SeatSelectionScreen extends StatefulWidget {
   const SeatSelectionScreen({

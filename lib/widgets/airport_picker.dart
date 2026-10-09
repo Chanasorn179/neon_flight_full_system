@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_localizations.dart';
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 
 /// From/To selector: two full-width rows showing code and city, with a swap
 /// button. Tapping a row opens a searchable airport sheet.

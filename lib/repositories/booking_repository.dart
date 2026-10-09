@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../data/mock_api.dart';
-import '../models/entities.dart';
+import '../data/offline_mock_api.dart';
+import '../models/travel_models.dart';
 import '../services/firebase_service.dart';
 
 abstract class BookingRepository {

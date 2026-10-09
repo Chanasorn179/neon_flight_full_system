@@ -6,7 +6,7 @@ enum BookingStatus { upcoming, completed, cancelled }
 
 enum PaymentMethod { promptPay, card, mobileBanking }
 
-/// Only the server (backend/scripts/payments.js) may set [paid]; Firestore
+/// Only the server (backend/scripts/payment_admin.js) may set [paid]; Firestore
 /// rules reject any client write that changes it.
 enum PaymentStatus { pending, paid }
 

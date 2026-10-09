@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mini_projects/data/mock_api.dart';
+import 'package:mini_projects/data/offline_mock_api.dart';
 import 'package:mini_projects/data/thai_airlines.dart';
 
 void main() {

@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../data/mock_api.dart';
-import '../models/entities.dart';
+import '../data/offline_mock_api.dart';
+import '../models/travel_models.dart';
 
 class AviationApiService {
   AviationApiService(this.mock);

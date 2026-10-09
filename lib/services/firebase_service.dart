@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../firebase_options.dart';
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 import 'ticket_qr_service.dart';
 
 class FirebaseService {
@@ -261,7 +261,7 @@ class FirebaseService {
   // Payment confirmation and public E-Ticket verification
   //
   // The app never writes publicTickets or paymentStatus = 'paid'. Both are set
-  // by backend/scripts/payments.js after an admin confirms the payment, and
+  // by backend/scripts/payment_admin.js after an admin confirms the payment, and
   // firestore.rules rejects client writes to them.
   // ---------------------------------------------------------------------------
 

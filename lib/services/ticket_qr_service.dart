@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 
 class TicketQrService {
   static const _secret = String.fromEnvironment(

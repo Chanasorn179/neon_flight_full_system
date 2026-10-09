@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../core/app_localizations.dart';
-import '../../models/entities.dart';
-import '../../widgets/app_widgets.dart';
+import '../../models/travel_models.dart';
+import '../../widgets/common_widgets.dart';
 
 typedef GpsLocationLoader = Future<GpsLocationEntity> Function();
 typedef TransferBookingCallback =

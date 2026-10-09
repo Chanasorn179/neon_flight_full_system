@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mini_projects/data/mock_api.dart';
-import 'package:mini_projects/models/entities.dart';
+import 'package:mini_projects/data/offline_mock_api.dart';
+import 'package:mini_projects/models/travel_models.dart';
 import 'package:mini_projects/providers/auth_provider.dart';
 import 'package:mini_projects/providers/booking_provider.dart';
 import 'package:mini_projects/repositories/auth_repository.dart';
 import 'package:mini_projects/repositories/booking_repository.dart';
-import 'package:mini_projects/services/profile_store.dart';
+import 'package:mini_projects/services/user_profile_store.dart';
 
 final _passenger = PassengerEntity(
   title: 'Ms.',

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mini_projects/data/mock_api.dart';
-import 'package:mini_projects/models/entities.dart';
+import 'package:mini_projects/data/offline_mock_api.dart';
+import 'package:mini_projects/models/travel_models.dart';
 import 'package:mini_projects/providers/flight_provider.dart';
 import 'package:mini_projects/repositories/booking_repository.dart';
 import 'package:mini_projects/repositories/flight_repository.dart';

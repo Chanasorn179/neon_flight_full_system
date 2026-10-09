@@ -1,4 +1,4 @@
-import 'entities.dart';
+import 'travel_models.dart';
 
 enum NoticeKind { departingSoon, paymentPending, paid, cancelled }
 

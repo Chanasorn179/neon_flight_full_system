@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 
 /// Fare model for the demo schedule, calibrated to real Thai market prices
 /// (October 2026): low-cost carriers sell Bangkok–Chiang Mai from roughly

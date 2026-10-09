@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 import '../repositories/auth_repository.dart';
 import '../services/firebase_service.dart';
 

@@ -278,9 +278,9 @@ Mock fallback results must not be considered real airline schedule data.
 ```text
 lib/
 ├── data/
-│   └── mock_api.dart
+│   └── offline_mock_api.dart
 ├── models/
-│   └── entities.dart
+│   └── travel_models.dart
 ├── providers/
 │   └── application state
 ├── repositories/

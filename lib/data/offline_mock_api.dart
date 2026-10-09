@@ -1,5 +1,5 @@
 import 'dart:math';
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 import 'fares.dart';
 import 'thai_airlines.dart';
 import 'thai_airports.dart';

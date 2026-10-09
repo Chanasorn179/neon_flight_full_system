@@ -4,11 +4,11 @@ import 'package:provider/provider.dart';
 import '../../core/app_localizations.dart';
 import '../../data/fares.dart';
 import '../../data/thai_airlines.dart';
-import '../../models/entities.dart';
+import '../../models/travel_models.dart';
 import '../../providers/flight_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../widgets/airline_logo.dart';
-import '../../widgets/app_widgets.dart';
+import '../../widgets/common_widgets.dart';
 import '../booking/passenger_screen.dart';
 
 class FlightResultsScreen extends StatelessWidget {

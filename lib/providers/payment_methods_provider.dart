@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/payment_catalog.dart';
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 import '../services/firebase_service.dart';
 
 /// The user's saved payment methods (Profile > Payment methods), used to

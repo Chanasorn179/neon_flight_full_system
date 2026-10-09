@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/fares.dart';
 import '../models/app_notice.dart';
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 import '../repositories/booking_repository.dart';
 
 class BookingProvider extends ChangeNotifier {

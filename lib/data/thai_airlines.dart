@@ -1,4 +1,4 @@
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 
 // Keep in sync with AIRLINES in tool/build_airport_data.py (Firestore seed).
 const thaiAirlines = <AirlineEntity>[

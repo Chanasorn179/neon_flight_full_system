@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 import '../repositories/flight_repository.dart';
 
 class FlightProvider extends ChangeNotifier {

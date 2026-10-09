@@ -3,17 +3,17 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/app_localizations.dart';
-import '../../models/entities.dart';
+import '../../models/travel_models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/booking_provider.dart';
 import '../../data/payment_catalog.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/payment_methods_provider.dart';
 import '../profile/payment_methods_screen.dart';
-import '../../services/bank_apps.dart';
+import '../../services/mobile_banking_service.dart';
 import '../../services/promptpay_service.dart';
 import '../../widgets/airline_logo.dart';
-import '../../widgets/app_widgets.dart';
+import '../../widgets/common_widgets.dart';
 import 'ticket_screen.dart';
 
 class PaymentScreen extends StatefulWidget {

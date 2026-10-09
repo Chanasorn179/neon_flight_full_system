@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
 import '../../data/payment_catalog.dart';
-import '../../models/entities.dart';
+import '../../models/travel_models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/payment_methods_provider.dart';

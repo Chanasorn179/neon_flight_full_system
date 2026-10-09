@@ -9,10 +9,10 @@ import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
 import '../../data/fares.dart';
-import '../../models/entities.dart';
+import '../../models/travel_models.dart';
 import '../../providers/language_provider.dart';
 import '../../widgets/airline_logo.dart';
-import '../../widgets/app_widgets.dart';
+import '../../widgets/common_widgets.dart';
 
 /// Boarding moment between seat selection and payment: a tilted boarding
 /// pass with "cabin doors closed", then the plane flies the great-circle

@@ -1,5 +1,5 @@
-import '../data/mock_api.dart';
-import '../models/entities.dart';
+import '../data/offline_mock_api.dart';
+import '../models/travel_models.dart';
 import '../services/aviation_api_service.dart';
 import '../services/firebase_service.dart';
 

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { tokenForBookingId, publicDocumentId } = require('./ticket_token');
-const { publicTicketFor } = require('./scripts/payments');
+const { publicTicketFor } = require('./scripts/payment_admin');
 
 test('ticket token matches the Flutter TicketQrService', () => {
   // Same values are asserted in test/ticket_qr_service_test.dart.

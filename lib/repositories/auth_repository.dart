@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../data/mock_api.dart';
-import '../models/entities.dart';
+import '../data/offline_mock_api.dart';
+import '../models/travel_models.dart';
 
 abstract class AuthRepository {
   Future<UserEntity> login(String email, String password);

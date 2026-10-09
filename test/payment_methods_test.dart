@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mini_projects/models/entities.dart';
+import 'package:mini_projects/models/travel_models.dart';
 import 'package:mini_projects/providers/payment_methods_provider.dart';
 
 SavedPaymentMethodEntity method(String id, SavedPaymentType type, String label, String detail) =>

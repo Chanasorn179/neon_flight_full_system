@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/thai_airlines.dart';
-import '../models/entities.dart';
+import '../models/travel_models.dart';
 
 /// Airline image from `assets/airlines/<CODE>.png`, falling back to a colored
 /// badge with the airline code when the airline or its image is unknown.

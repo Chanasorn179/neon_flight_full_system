@@ -1,4 +1,4 @@
-// Admin API for the payment-confirmation page (backend/admin/index.html,
+// Admin API for the payment-confirmation page (backend/admin_web/index.html,
 // served at /admin). Every route needs the X-Admin-Key header to match
 // ADMIN_API_KEY; without that env var the admin API is switched off.
 const crypto = require('node:crypto');

@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mini_projects/data/fares.dart';
-import 'package:mini_projects/data/mock_api.dart';
+import 'package:mini_projects/data/offline_mock_api.dart';
 import 'package:mini_projects/data/thai_airports.dart';
-import 'package:mini_projects/models/entities.dart';
+import 'package:mini_projects/models/travel_models.dart';
 import 'package:mini_projects/providers/booking_provider.dart';
 
 AirportEntity airport(String code) => thaiAirports.firstWhere((a) => a.code == code);

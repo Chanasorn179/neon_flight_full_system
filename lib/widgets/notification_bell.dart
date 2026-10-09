@@ -8,7 +8,7 @@ import '../providers/booking_provider.dart';
 import '../providers/language_provider.dart';
 import '../providers/settings_provider.dart';
 import '../screens/booking/ticket_screen.dart';
-import 'app_widgets.dart';
+import 'common_widgets.dart';
 
 /// App-bar bell with an unseen count; opens the list of booking notices.
 class NotificationBell extends StatelessWidget {

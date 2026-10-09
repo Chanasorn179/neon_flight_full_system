@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme.dart';
 import '../../core/app_localizations.dart';
-import '../../widgets/app_widgets.dart';
-import '../../services/profile_store.dart';
+import '../../widgets/common_widgets.dart';
+import '../../services/user_profile_store.dart';
 import 'payment_methods_screen.dart';
 import '../../services/firebase_service.dart';
-import '../../models/entities.dart';
+import '../../models/travel_models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/payment_methods_provider.dart';

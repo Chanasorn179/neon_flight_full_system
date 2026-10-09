@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
-import '../../models/entities.dart';
+import '../../models/travel_models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/flight_provider.dart';
 import '../../providers/language_provider.dart';

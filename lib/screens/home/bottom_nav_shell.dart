@@ -5,7 +5,7 @@ import '../../core/app_localizations.dart';
 import '../../providers/language_provider.dart';
 import '../booking/booking_history_screen.dart';
 import '../profile/profile_screen.dart';
-import 'dashboard_screen.dart';
+import 'home_search_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
