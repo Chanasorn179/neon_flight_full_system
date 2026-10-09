@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../core/app_localizations.dart';
 import '../../models/travel_models.dart';
+import '../../services/road_distance_service.dart';
 import '../../widgets/common_widgets.dart';
 
 typedef GpsLocationLoader = Future<GpsLocationEntity> Function();
@@ -13,6 +14,9 @@ typedef TransferBookingCallback =
     FutureOr<void> Function(TransferBookingEntity booking);
 
 const double _transferServiceRadiusKm = 20;
+
+/// Beyond this straight-line distance no road route is requested.
+const double _routingLimitKm = 200;
 
 class AirportTransferSection extends StatefulWidget {
   const AirportTransferSection({
@@ -46,6 +50,11 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
   bool locating = false;
   String? locationErrorKey;
 
+  /// Driving route for [currentLocation]; null until OSRM answers or when
+  /// it can't (then the straight-line distance is shown instead).
+  RoadRoute? road;
+  bool routing = false;
+
   String get languageCode => widget.languageCode;
   String get departureAirportCode => widget.departureAirportCode;
 
@@ -57,6 +66,9 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     super.initState();
     reservation = widget.initialReservation;
     currentLocation = reservation?.pickupLocation;
+    if (currentLocation != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refreshRoad());
+    }
   }
 
   _TransferLocation? get _departureLocation {
@@ -74,6 +86,8 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
       reservation = widget.initialReservation;
       currentLocation = reservation?.pickupLocation;
       locationErrorKey = null;
+      road = null;
+      _refreshRoad();
     } else if (oldWidget.initialReservation?.id !=
         widget.initialReservation?.id) {
       reservation = widget.initialReservation;
@@ -102,6 +116,37 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
           airport.longitude,
         ) /
         1000;
+  }
+
+  /// Road distance when known, otherwise the straight line.
+  double _effectiveDistanceKm(
+    _TransferLocation airport,
+    GpsLocationEntity location,
+  ) => road?.distanceKm ?? _distanceToAirportKm(airport, location);
+
+  /// Looks up the driving route from [currentLocation] to the airport.
+  Future<void> _refreshRoad() async {
+    final from = currentLocation;
+    final airport = _departureLocation;
+    if (from == null || airport == null) return;
+    // No point routing from another country (e.g. the emulator's default
+    // Googleplex fix); the service-area check fails either way.
+    if (_distanceToAirportKm(airport, from) > _routingLimitKm) {
+      if (mounted) setState(() => road = null);
+      return;
+    }
+    if (mounted) setState(() => routing = true);
+    final route = await RoadDistanceService.drive(
+      fromLat: from.latitude,
+      fromLng: from.longitude,
+      toLat: airport.latitude,
+      toLng: airport.longitude,
+    );
+    if (!mounted || currentLocation != from) return;
+    setState(() {
+      road = route;
+      routing = false;
+    });
   }
 
   Future<GpsLocationEntity> _loadGpsLocation() async {
@@ -147,8 +192,10 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
       if (!mounted) return null;
       setState(() {
         currentLocation = location;
+        road = null;
         locating = false;
       });
+      await _refreshRoad();
       return location;
     } on _GpsLocationException catch (error) {
       if (!mounted) return null;
@@ -194,7 +241,9 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
       return;
     }
 
-    final distanceToAirportKm = _distanceToAirportKm(location, pickupLocation);
+    if (road == null && !routing) await _refreshRoad();
+    if (!context.mounted) return;
+    final distanceToAirportKm = _effectiveDistanceKm(location, pickupLocation);
     if (distanceToAirportKm > _transferServiceRadiusKm) {
       setState(() {
         locationErrorKey = 'gps_outside_service_area';
@@ -257,7 +306,6 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     );
   }
 
-
   bool _looksLikeAndroidEmulatorDefault(GpsLocationEntity location) {
     // Android Emulator commonly starts at Googleplex:
     // 37.4219983, -122.084. This is not a distance-calculation bug.
@@ -275,13 +323,22 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
         longitude: airport.longitude + 0.012,
         accuracyMeters: 8,
       );
+      road = null;
       locationErrorKey = null;
     });
+    _refreshRoad();
   }
 
   String _distanceLabel(double distanceKm) {
     if (distanceKm < 1) {
       return '${(distanceKm * 1000).round()} m';
+    }
+    if (distanceKm >= 1000) {
+      final whole = distanceKm.round().toString().replaceAllMapped(
+        RegExp(r'\B(?=(\d{3})+(?!\d))'),
+        (_) => ',',
+      );
+      return '$whole km';
     }
     return '${distanceKm.toStringAsFixed(1)} km';
   }
@@ -295,10 +352,12 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     final availableCount = _availableVehicles(location).length;
     final distanceToAirportKm = currentLocation == null
         ? null
-        : _distanceToAirportKm(location, currentLocation!);
-    final isWithinServiceArea = distanceToAirportKm == null ||
+        : _effectiveDistanceKm(location, currentLocation!);
+    final isWithinServiceArea =
+        distanceToAirportKm == null ||
         distanceToAirportKm <= _transferServiceRadiusKm;
-    final emulatorDefault = currentLocation != null &&
+    final emulatorDefault =
+        currentLocation != null &&
         _looksLikeAndroidEmulatorDefault(currentLocation!);
 
     final primary = theme.colorScheme.primary;
@@ -511,10 +570,10 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                                 child: Text(
                                   _localized(
                                     'The emulator is using the default Googleplex GPS location. '
-                                    'That is why the distance is thousands of kilometers.',
+                                        'That is why the distance is thousands of kilometers.',
                                     'Emulator กำลังใช้พิกัดเริ่มต้น Googleplex '
-                                    '(37.421998, -122.084000) จึงทำให้ระยะทางเป็นหลักหมื่นกิโลเมตร '
-                                    'ไม่ใช่สูตรคำนวณระยะทางผิด',
+                                        '(37.421998, -122.084000) จึงทำให้ระยะทางเป็นหลักหมื่นกิโลเมตร '
+                                        'ไม่ใช่สูตรคำนวณระยะทางผิด',
                                   ),
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     fontWeight: FontWeight.w600,
@@ -535,12 +594,16 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                           decoration: BoxDecoration(
                             color: isWithinServiceArea
                                 ? Colors.green.withValues(alpha: .08)
-                                : theme.colorScheme.error.withValues(alpha: .07),
+                                : theme.colorScheme.error.withValues(
+                                    alpha: .07,
+                                  ),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: isWithinServiceArea
                                   ? Colors.green.withValues(alpha: .28)
-                                  : theme.colorScheme.error.withValues(alpha: .25),
+                                  : theme.colorScheme.error.withValues(
+                                      alpha: .25,
+                                    ),
                             ),
                           ),
                           child: Row(
@@ -551,8 +614,9 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                                 decoration: BoxDecoration(
                                   color: isWithinServiceArea
                                       ? Colors.green.withValues(alpha: .13)
-                                      : theme.colorScheme.error
-                                          .withValues(alpha: .12),
+                                      : theme.colorScheme.error.withValues(
+                                          alpha: .12,
+                                        ),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
@@ -585,9 +649,53 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${_distanceLabel(distanceToAirportKm)} '
-                                      '· ${_localized('service radius 20 km', 'พื้นที่ให้บริการ 20 กม.')}',
+                                      routing
+                                          ? tr(
+                                              languageCode,
+                                              'route_calculating',
+                                            )
+                                          : road != null
+                                          ? trArgs(
+                                              languageCode,
+                                              'road_distance',
+                                              {
+                                                'km': _distanceLabel(
+                                                  road!.distanceKm,
+                                                ),
+                                                'min':
+                                                    '${road!.duration.inMinutes.clamp(1, 999)}',
+                                              },
+                                            )
+                                          : trArgs(
+                                              languageCode,
+                                              distanceToAirportKm >
+                                                      _routingLimitKm
+                                                  ? 'straight_distance_far'
+                                                  : 'straight_distance',
+                                              {
+                                                'km': _distanceLabel(
+                                                  distanceToAirportKm,
+                                                ),
+                                              },
+                                            ),
+                                      key: const ValueKey(
+                                        'transfer-distance-label',
+                                      ),
                                       style: theme.textTheme.bodySmall,
+                                    ),
+                                    Text(
+                                      road != null
+                                          ? '${tr(languageCode, 'service_radius_road')} · OSRM © OpenStreetMap'
+                                          : tr(
+                                              languageCode,
+                                              'service_radius_road',
+                                            ),
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
                                     ),
                                   ],
                                 ),
@@ -621,8 +729,8 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                                   locating
                                       ? 'gps_locating'
                                       : currentLocation == null
-                                          ? 'gps_use_current_location'
-                                          : 'gps_refresh_location',
+                                      ? 'gps_use_current_location'
+                                      : 'gps_refresh_location',
                                 ),
                               ),
                               style: OutlinedButton.styleFrom(
@@ -720,7 +828,8 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                         height: 54,
                         child: FilledButton.icon(
                           key: const ValueKey('book-airport-transfer'),
-                          onPressed: reservation == null &&
+                          onPressed:
+                              reservation == null &&
                                   availableCount > 0 &&
                                   !locating &&
                                   isWithinServiceArea

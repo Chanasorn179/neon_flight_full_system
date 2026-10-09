@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/travel_models.dart';
@@ -31,11 +33,15 @@ class AuthProvider extends ChangeNotifier {
 
       final user = currentUser!;
 
-      await FirebaseService.saveUser(
+      // Don't hold the login spinner on a Firestore round trip; the
+      // profile write finishes in the background.
+      unawaited(FirebaseService.saveUser(
         id: user.id,
         name: user.name,
         email: user.email,
-      );
+      ).catchError(
+        (Object e) => debugPrint('saveUser failed: $e'),
+      ));
 
       return true;
     } catch (e) {
@@ -65,11 +71,15 @@ class AuthProvider extends ChangeNotifier {
 
       final user = currentUser!;
 
-      await FirebaseService.saveUser(
+      // Don't hold the login spinner on a Firestore round trip; the
+      // profile write finishes in the background.
+      unawaited(FirebaseService.saveUser(
         id: user.id,
         name: user.name,
         email: user.email,
-      );
+      ).catchError(
+        (Object e) => debugPrint('saveUser failed: $e'),
+      ));
 
       return true;
     } catch (e) {
