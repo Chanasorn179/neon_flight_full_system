@@ -1,0 +1,5 @@
+tags:
+  screenshots:
+    # Visual review tool, Windows-only (uses system fonts). Run with:
+    #   flutter test test/screenshots --run-skipped --update-goldens
+    skip: "screenshot tool; run with --run-skipped --update-goldens"

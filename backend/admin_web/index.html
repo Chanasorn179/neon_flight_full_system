@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neon Flight Admin</title>
+<style>
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --surface-2: #f0f3fa; --text: #141a26;
+    --muted: #5b6475; --line: #dde3ee; --brand: #1e5bd6; --brand-ink: #ffffff;
+    --brand-soft: #e7efff; --ok: #137a3a; --ok-soft: #e5f5ea; --danger: #c62828;
+    --danger-soft: #fdecec; --amber: #6b4300; --amber-soft: #fff3dc;
+    --shadow: 0 6px 24px rgba(20, 26, 38, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1016; --surface: #161b24; --surface-2: #1d232e; --text: #e8ecf4;
+      --muted: #9aa4b6; --line: #2b3240; --brand: #7fa6ff; --brand-ink: #0d1016;
+      --brand-soft: #1b2a47; --ok: #7ad49a; --ok-soft: #15301f; --danger: #ff8a80;
+      --danger-soft: #3a1717; --amber: #ffd58a; --amber-soft: #3a2c12;
+      --shadow: 0 6px 24px rgba(0, 0, 0, .35);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 "Leelawadee UI", "Noto Sans Thai", "Segoe UI", system-ui, sans-serif;
+  }
+  button, input { font: inherit; }
+  .bar {
+    position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 12px;
+    padding: 12px 20px; color: #fff;
+    background: linear-gradient(120deg, #1846c2, #1e63db 55%, #0b7896);
+  }
+  .bar h1 { font-size: 18px; margin: 0; flex: 1; letter-spacing: .2px; }
+  .bar h1 small { font-weight: 500; opacity: .85; margin-left: 6px; }
+  .bar button {
+    min-height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.35);
+    background: rgba(255,255,255,.12); color: #fff; cursor: pointer;
+  }
+  .bar button:hover { background: rgba(255,255,255,.22); }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
+    box-shadow: var(--shadow);
+  }
+  #login { max-width: 420px; margin: 60px auto; padding: 28px; }
+  #login h2 { margin: 0 0 6px; }
+  #login p { margin: 0 0 18px; color: var(--muted); }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  #settings { padding: 22px; max-width: 520px; display: grid; gap: 10px; }
+  #settings h2 { margin: 0; }
+  #settings input { width: 100%; min-height: 48px; padding: 0 14px; border-radius: 14px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--text); }
+  input[type=password] {
+    width: 100%; min-height: 48px; padding: 0 14px; border-radius: 14px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+  }
+  input:focus-visible, button:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+  .primary {
+    min-height: 48px; padding: 0 18px; border-radius: 14px; border: 0; cursor: pointer;
+    background: var(--brand); color: var(--brand-ink); font-weight: 700;
+  }
+  .danger {
+    min-height: 48px; padding: 0 16px; border-radius: 14px; cursor: pointer; font-weight: 700;
+    background: transparent; color: var(--danger); border: 1.5px solid var(--danger);
+  }
+  .primary:disabled, .danger:disabled { opacity: .5; cursor: progress; }
+  #login .primary { width: 100%; margin-top: 16px; }
+  .error { color: var(--danger); margin-top: 10px; min-height: 1.5em; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .tab {
+    min-height: 44px; padding: 0 16px; border-radius: 999px; cursor: pointer; font-weight: 600;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  }
+  .tab[aria-selected=true] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+  .tab .count {
+    display: inline-block; min-width: 22px; margin-left: 6px; padding: 0 6px; border-radius: 999px;
+    background: var(--amber-soft); color: var(--amber); font-size: 13px;
+  }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat { padding: 16px 18px; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  .stat b { display: block; font-size: 24px; margin-top: 2px; }
+  .hint {
+    padding: 12px 16px; border-radius: 14px; margin-bottom: 16px;
+    background: var(--amber-soft); color: var(--amber);
+  }
+  #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+  .booking { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .booking header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .id { font-family: ui-monospace, Consolas, monospace; font-weight: 700; letter-spacing: .5px; }
+  .badge { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .badge.pending { background: var(--amber-soft); color: var(--amber); }
+  .badge.paid { background: var(--ok-soft); color: var(--ok); }
+  .badge.cancelled { background: var(--danger-soft); color: var(--danger); }
+  .badge.trip { background: var(--brand-soft); color: var(--brand); }
+  .created { color: var(--muted); font-size: 13px; margin-left: auto; }
+  .leg { padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+  .route { font-size: 20px; font-weight: 800; letter-spacing: .5px; }
+  .route .arrow { color: var(--muted); margin: 0 6px; font-weight: 500; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .people { font-size: 14px; }
+  .total { display: flex; align-items: baseline; justify-content: space-between; }
+  .total b { font-size: 22px; }
+  .actions { display: flex; gap: 10px; }
+  .actions .primary { flex: 1; }
+  .empty { grid-column: 1 / -1; text-align: center; padding: 48px 16px; color: var(--muted); }
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none;
+    background: #202733; color: #fff; padding: 12px 18px; border-radius: 14px; max-width: 90vw;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>NEON FLIGHT <small>ยืนยันการชำระเงิน</small></h1>
+  <button id="refresh" type="button" hidden>รีเฟรช</button>
+  <button id="logout" type="button" hidden>ออกจากระบบ</button>
+</div>
+
+<main>
+  <form id="login" class="card" hidden>
+    <h2>เข้าสู่ระบบแอดมิน</h2>
+    <p>ใช้รหัสเดียวกับ <code>ADMIN_API_KEY</code> ที่ตั้งไว้ตอนเปิด backend</p>
+    <label for="key">รหัสแอดมิน</label>
+    <input id="key" type="password" autocomplete="current-password" required>
+    <button class="primary" type="submit">เข้าสู่ระบบ</button>
+    <div class="error" id="loginError" role="alert"></div>
+  </form>
+
+  <section id="app" hidden>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-state="pending" aria-selected="true">รอยืนยัน<span class="count" id="pendingCount">0</span></button>
+      <button class="tab" role="tab" data-state="paid" aria-selected="false">ชำระแล้ว</button>
+      <button class="tab" role="tab" data-state="cancelled" aria-selected="false">ยกเลิกแล้ว</button>
+      <button class="tab" role="tab" data-state="settings" aria-selected="false">ตั้งค่า</button>
+    </div>
+    <form id="settings" class="card" hidden>
+      <h2>รับเงินผ่าน PromptPay</h2>
+      <p class="meta">แอปใช้ข้อมูลนี้สร้าง QR ให้ผู้โดยสารสแกนจ่าย เงินจะเข้าบัญชีที่ผูกกับ PromptPay นี้</p>
+      <label for="ppId">เบอร์มือถือ (10 หลัก) หรือเลขบัตรประชาชน / เลขผู้เสียภาษี (13 หลัก)</label>
+      <input id="ppId" inputmode="numeric" autocomplete="off" required>
+      <label for="ppName">ชื่อร้านที่แสดงใต้ QR</label>
+      <input id="ppName" maxlength="40" placeholder="NEON FLIGHT">
+      <button class="primary" type="submit">บันทึก</button>
+      <div class="error" id="settingsMsg" role="status"></div>
+    </form>
+    <div class="stats" id="stats"></div>
+    <div class="hint" id="hint">ก่อนกดยืนยัน ให้ตรวจในแอปธนาคารว่าได้รับเงิน<b>ตรงตามยอด</b> และหมายเหตุการโอนตรงกับ Booking ID (ราคาคำนวณในแอปผู้ใช้)</div>
+    <div id="list" aria-live="polite"></div>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const KEY = 'neon-admin-key';
+  let adminKey = '';
+  let state = 'pending';
+  try { adminKey = sessionStorage.getItem(KEY) || ''; } catch (_) {}
+
+  const baht = (n) => '฿' + Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 0 });
+  const when = (iso) => iso
+    ? new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
+    : '-';
+  const methodName = { promptPay: 'PromptPay', card: 'บัตร', mobileBanking: 'Mobile Banking' };
+  const cabinName = { economy: 'ชั้นประหยัด', premiumEconomy: 'ชั้นประหยัดพรีเมียม', business: 'ชั้นธุรกิจ', first: 'ชั้นหนึ่ง' };
+
+  function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag);
+    Object.assign(node, props);
+    for (const child of children) {
+      if (child == null || child === false) continue;
+      node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+    }
+    return node;
+  }
+
+  function toast(message) {
+    const t = $('toast');
+    t.textContent = message;
+    t.classList.add('show');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => t.classList.remove('show'), 3200);
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch('/api/admin' + path, {
+      ...options,
+      headers: { 'X-Admin-Key': adminKey, ...(options.headers || {}) },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 401) { logout('รหัสแอดมินไม่ถูกต้อง'); throw new Error('unauthorized'); }
+    if (!res.ok) throw new Error(body.message || ('HTTP ' + res.status));
+    return body;
+  }
+
+  function showLogin(message = '') {
+    $('login').hidden = false; $('app').hidden = true;
+    $('refresh').hidden = true; $('logout').hidden = true;
+    $('loginError').textContent = message;
+    $('key').focus();
+  }
+
+  function logout(message) {
+    adminKey = '';
+    try { sessionStorage.removeItem(KEY); } catch (_) {}
+    showLogin(message);
+  }
+
+  // Round-trip legs share tripId and are paid together: one card per trip.
+  function group(bookings) {
+    const groups = new Map();
+    for (const b of bookings) {
+      const key = b.tripId || b.id;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(b);
+    }
+    return [...groups.values()].map((legs) => legs.sort((a, b) => a.id.length - b.id.length));
+  }
+
+  function legView(b) {
+    return el('div', { className: 'leg' },
+      el('div', { className: 'route' }, b.from, el('span', { className: 'arrow' }, '→'), b.to),
+      el('div', { className: 'meta' },
+        `${b.flightNumber} · ${when(b.departureTime)} · ${cabinName[b.cabinClass] || b.cabinClass}`),
+      el('div', { className: 'meta' }, `ที่นั่ง ${b.seats.join(', ') || '-'}`));
+  }
+
+  function card(legs) {
+    const first = legs[0];
+    const total = legs.reduce((sum, b) => sum + b.total, 0);
+    const status = first.status === 'cancelled' ? 'cancelled' : first.paymentStatus;
+    const statusText = { pending: 'รอยืนยัน', paid: 'ชำระแล้ว', cancelled: 'ยกเลิกแล้ว' }[status];
+    const node = el('article', { className: 'card booking' },
+      el('header', {},
+        el('span', { className: 'id' }, first.id),
+        el('span', { className: 'badge ' + status }, statusText),
+        legs.length > 1 && el('span', { className: 'badge trip' }, 'ไป-กลับ'),
+        el('span', { className: 'created' }, when(first.createdAt))),
+      ...legs.map(legView),
+      el('div', { className: 'people' }, `ผู้โดยสาร: ${first.passengers.join(', ') || '-'}`),
+      el('div', { className: 'total' },
+        el('span', { className: 'meta' }, first.paymentLabel || methodName[first.paymentMethod] || first.paymentMethod),
+        el('b', {}, baht(total))));
+
+    if (status === 'pending') {
+      const ok = el('button', { className: 'primary', type: 'button' }, 'ยืนยันรับเงิน');
+      const no = el('button', { className: 'danger', type: 'button' }, 'ปฏิเสธ');
+      const busy = (b) => { ok.disabled = b; no.disabled = b; };
+      ok.onclick = async () => {
+        if (!confirm(`ยืนยันว่าได้รับเงิน ${baht(total)} สำหรับ ${first.id} แล้ว?\nระบบจะออกตั๋ว${legs.length > 1 ? 'ทั้งขาไปและขากลับ' : ''}ให้ผู้โดยสาร`)) return;
+        busy(true);
+        try {
+          const r = await api(`/bookings/${encodeURIComponent(first.id)}/confirm`, { method: 'POST' });
+          toast(`ยืนยันแล้ว ${r.confirmed.join(', ')} · ออกตั๋วเรียบร้อย`);
+          load();
+        } catch (e) { if (e.message !== 'unauthorized') toast('ยืนยันไม่สำเร็จ: ' + e.message); busy(false); }
+      };
+      no.onclick = async () => {
+        if (!confirm(`ปฏิเสธและยกเลิก ${first.id}? ที่นั่งจะถูกปล่อยคืน`)) return;
+        busy(true);
+        try {
+          const r = await api(`/bookings/${encodeURIComponent(first.id)}/reject`, { method: 'POST' });
+          toast(`ยกเลิก ${r.cancelled.join(', ')} · ปล่อยที่นั่ง ${r.released} ที่`);
+          load();
+        } catch (e) { if (e.message !== 'unauthorized') toast('ปฏิเสธไม่สำเร็จ: ' + e.message); busy(false); }
+      };
+      node.append(el('div', { className: 'actions' }, ok, no));
+    }
+    return node;
+  }
+
+  function renderStats(groups) {
+    const total = groups.reduce((sum, legs) => sum + legs.reduce((s, b) => s + b.total, 0), 0);
+    const label = { pending: 'รอยืนยัน', paid: 'ชำระแล้ว', cancelled: 'ยกเลิกแล้ว' }[state];
+    $('stats').replaceChildren(
+      el('div', { className: 'card stat' }, el('span', {}, `การจอง${label}`), el('b', {}, groups.length)),
+      el('div', { className: 'card stat' }, el('span', {}, 'ยอดรวม'), el('b', {}, baht(total))));
+  }
+
+  async function loadSettings() {
+    $('settingsMsg').textContent = '';
+    try {
+      const config = await api('/config/payment');
+      $('ppId').value = config.promptPayId || '';
+      $('ppName').value = config.merchantName || '';
+    } catch (e) {
+      if (e.message !== 'unauthorized') $('settingsMsg').textContent = e.message;
+    }
+  }
+
+  $('settings').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    $('settingsMsg').textContent = '';
+    try {
+      const saved = await api('/config/payment', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ promptPayId: $('ppId').value, merchantName: $('ppName').value }),
+      });
+      $('ppId').value = saved.promptPayId;
+      $('ppName').value = saved.merchantName;
+      toast('บันทึกแล้ว แอปจะใช้เบอร์นี้ในการชำระครั้งถัดไป');
+    } catch (e) {
+      if (e.message !== 'unauthorized') $('settingsMsg').textContent = e.message;
+    }
+  });
+
+  async function load() {
+    const settings = state === 'settings';
+    $('settings').hidden = !settings;
+    $('stats').hidden = settings;
+    $('list').hidden = settings;
+    if (settings) { $('hint').hidden = true; return loadSettings(); }
+    $('list').replaceChildren(el('div', { className: 'empty' }, 'กำลังโหลด...'));
+    try {
+      const [{ bookings }, pending] = await Promise.all([
+        api('/bookings?state=' + state),
+        state === 'pending' ? null : api('/bookings?state=pending'),
+      ]);
+      const groups = group(bookings);
+      const pendingGroups = state === 'pending' ? groups : group(pending.bookings);
+      $('pendingCount').textContent = pendingGroups.length;
+      $('hint').hidden = state !== 'pending';
+      renderStats(groups);
+      $('list').replaceChildren(...(groups.length
+        ? groups.map(card)
+        : [el('div', { className: 'empty' }, 'ไม่มีรายการ')]));
+    } catch (e) {
+      if (e.message === 'unauthorized') return;
+      $('list').replaceChildren(el('div', { className: 'empty' }, 'โหลดไม่สำเร็จ: ' + e.message));
+    }
+  }
+
+  function enter() {
+    $('login').hidden = true; $('app').hidden = false;
+    $('refresh').hidden = false; $('logout').hidden = false;
+    load();
+  }
+
+  $('login').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    adminKey = $('key').value.trim();
+    try {
+      await api('/bookings?state=pending');
+      try { sessionStorage.setItem(KEY, adminKey); } catch (_) {}
+      $('key').value = '';
+      enter();
+    } catch (e) {
+      if (e.message !== 'unauthorized') $('loginError').textContent = e.message;
+    }
+  });
+  $('refresh').onclick = load;
+  $('logout').onclick = () => logout('');
+  for (const tab of document.querySelectorAll('.tab')) {
+    tab.onclick = () => {
+      state = tab.dataset.state;
+      for (const t of document.querySelectorAll('.tab')) t.setAttribute('aria-selected', t === tab);
+      load();
+    };
+  }
+
+  if (adminKey) enter(); else showLogin();
+})();
+</script>
+</body>
+</html>

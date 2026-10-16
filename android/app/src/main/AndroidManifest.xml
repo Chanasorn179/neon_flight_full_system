@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Saving the payment QR to the gallery (only needed up to Android 9). -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:label="mini_projects"
@@ -44,5 +50,18 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Store pages for banking apps that aren't installed (url_launcher). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <!-- Thai banking apps opened from Mobile Banking payment. -->
+        <package android:name="com.kasikorn.retail.mbanking.wap"/>
+        <package android:name="com.scb.phone"/>
+        <package android:name="com.bbl.mobilebanking"/>
+        <package android:name="ktbcs.netbank"/>
+        <package android:name="com.krungsri.kma"/>
+        <package android:name="com.TMBTOUCH.PRODUCTION"/>
+        <package android:name="com.mobilife.gsb.mymo"/>
     </queries>
 </manifest>

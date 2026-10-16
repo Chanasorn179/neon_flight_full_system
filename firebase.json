@@ -1,0 +1,41 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "neon-flight",
+          "appId": "1:506701806691:android:357da75b5a1a8de1738c56",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "neon-flight",
+          "configurations": {
+            "android": "1:506701806691:android:357da75b5a1a8de1738c56",
+            "ios": "1:506701806691:ios:4d044d85a45246e7738c56",
+            "web": "1:506701806691:web:0dd8071fd10b8586738c56",
+            "windows": "1:506701806691:web:fd207c0bcdfd9f1c738c56"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "web_ticket",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/t/**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

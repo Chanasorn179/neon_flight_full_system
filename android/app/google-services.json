@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "506701806691",
+    "project_id": "neon-flight",
+    "storage_bucket": "neon-flight.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:506701806691:android:357da75b5a1a8de1738c56",
+        "android_client_info": {
+          "package_name": "com.example.mini_projects"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEtTGy7d5rt6ydh0kG6UwtVmoYxZ31NyU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

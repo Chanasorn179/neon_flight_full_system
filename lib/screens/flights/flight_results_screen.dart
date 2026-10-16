@@ -2,24 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
-import '../../models/entities.dart';
+import '../../core/theme.dart';
+import '../../data/fares.dart';
+import '../../data/thai_airlines.dart';
+import '../../models/travel_models.dart';
 import '../../providers/flight_provider.dart';
 import '../../providers/language_provider.dart';
-import '../../widgets/app_widgets.dart';
+import '../../widgets/airline_logo.dart';
+import '../../widgets/common_widgets.dart';
 import '../booking/passenger_screen.dart';
 
 class FlightResultsScreen extends StatelessWidget {
-  const FlightResultsScreen({super.key});
+  const FlightResultsScreen({super.key, this.outbound});
+
+  /// Set on the second step of a round trip: the chosen outbound flight.
+  final FlightEntity? outbound;
 
   @override
   Widget build(BuildContext context) {
     final p = context.watch<FlightProvider>();
     final lang = context.watch<LanguageProvider>().languageCode;
+    final choosingReturn = outbound != null;
+    final from = choosingReturn ? p.to : p.from;
+    final to = choosingReturn ? p.from : p.to;
 
     return Scaffold(
-      appBar: AppBar(title: Text('${p.from} → ${p.to}')),
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(from),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6),
+              child: Icon(Icons.arrow_forward_rounded, size: 20),
+            ),
+            Text(to),
+          ],
+        ),
+      ),
       body: Column(
         children: [
+          if (p.isRoundTrip)
+            _StepBanner(
+              lang: lang,
+              step: choosingReturn ? 2 : 1,
+              title: tr(lang, choosingReturn ? 'choose_return' : 'choose_outbound'),
+              outbound: outbound,
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Row(
@@ -67,6 +96,22 @@ class FlightResultsScreen extends StatelessWidget {
     );
   }
 
+  void _select(BuildContext context, FlightProvider p, FlightEntity flight) {
+    final Widget next;
+    if (p.isRoundTrip && outbound == null) {
+      next = FlightResultsScreen(outbound: flight);
+    } else if (outbound != null) {
+      next = PassengerScreen(
+        flight: outbound!,
+        cabinClass: p.cabinClass,
+        returnFlight: flight,
+      );
+    } else {
+      next = PassengerScreen(flight: flight, cabinClass: p.cabinClass);
+    }
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => next));
+  }
+
   Widget _body(BuildContext context, FlightProvider p, String lang) {
     if (p.loading) return const Center(child: CircularProgressIndicator());
     if (p.error != null) {
@@ -77,22 +122,24 @@ class FlightResultsScreen extends StatelessWidget {
         action: FilledButton(onPressed: p.search, child: Text(tr(lang, 'retry'))),
       );
     }
-    if (p.results.isEmpty) {
+    final flights = outbound == null ? p.results : p.returnOptionsAfter(outbound!);
+    if (flights.isEmpty) {
       return EmptyState(
         icon: Icons.flight_takeoff,
         title: tr(lang, 'no_flights'),
-        subtitle: tr(lang, 'no_flights_sub'),
+        subtitle: tr(lang, outbound == null ? 'no_flights_sub' : 'no_return_flights'),
         action: FilledButton(onPressed: () => Navigator.pop(context), child: Text(tr(lang, 'search_again'))),
       );
     }
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: p.results.length,
+      itemCount: flights.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, i) => FlightCard(
-        flight: p.results[i],
+        flight: flights[i],
         cabinClass: p.cabinClass,
         lang: lang,
+        onSelect: () => _select(context, p, flights[i]),
       ),
     );
   }
@@ -104,16 +151,29 @@ class FlightCard extends StatelessWidget {
     required this.flight,
     required this.cabinClass,
     required this.lang,
+    required this.onSelect,
   });
 
   final FlightEntity flight;
   final CabinClass cabinClass;
   final String lang;
+  final VoidCallback onSelect;
 
   @override
   Widget build(BuildContext context) {
     final h = flight.duration.inHours;
     final m = flight.duration.inMinutes.remainder(60);
+    final airline = airlineForFlight(flight.airline, flight.flightNumber);
+    final passengers = context.watch<FlightProvider>().passengerCount;
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final fewSeats = flight.availableSeats < 6;
+    final seatColor = fewSeats
+        ? theme.colorScheme.error
+        : AppTheme.success(theme.brightness);
+    // What the passenger actually pays per seat: fare + airport tax.
+    final perPerson = flight.price(cabinClass) +
+        passengerServiceCharge(flight.departure, flight.arrival);
 
     return Card(
       child: Padding(
@@ -122,20 +182,45 @@ class FlightCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(child: Text(flight.airline.substring(0, 1))),
+                AirlineLogo(
+                  airlineName: flight.airline,
+                  flightNumber: flight.flightNumber,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(flight.airline, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(flight.flightNumber),
+                      Text(
+                        airline == null
+                            ? flight.airline
+                            : (lang == 'th' ? airline.nameTh : airline.nameEn),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        flight.flightNumber,
+                        style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      ),
                     ],
                   ),
                 ),
-                Text(
-                  '${flight.availableSeats} ${tr(lang, 'seats')}',
-                  style: TextStyle(color: flight.availableSeats < 6 ? Colors.red : Colors.green),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: seatColor.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${flight.availableSeats} ${tr(lang, 'seats')}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: seatColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -146,9 +231,17 @@ class FlightCard extends StatelessWidget {
                 Expanded(
                   child: Column(
                     children: [
-                      Text('$h ${tr(lang, 'hours')} $m ${tr(lang, 'minutes')}', style: Theme.of(context).textTheme.labelSmall),
-                      const Icon(Icons.flight_takeoff),
-                      Text(tr(lang, 'direct'), style: const TextStyle(fontSize: 12)),
+                      Text(
+                        '$h ${tr(lang, 'hours')} $m ${tr(lang, 'minutes')}',
+                        style: theme.textTheme.labelMedium?.copyWith(color: muted),
+                      ),
+                      const SizedBox(height: 2),
+                      Icon(Icons.flight_rounded, color: theme.colorScheme.primary),
+                      const SizedBox(height: 2),
+                      Text(
+                        tr(lang, 'direct'),
+                        style: theme.textTheme.labelMedium?.copyWith(color: muted),
+                      ),
                     ],
                   ),
                 ),
@@ -162,21 +255,101 @@ class FlightCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_cabin(lang, cabinClass)),
-                      Text(money(flight.price(cabinClass)), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                      Text(
+                        tr(lang, cabinClass.labelKey),
+                        style: theme.textTheme.labelLarge?.copyWith(color: muted),
+                      ),
+                      Text(
+                        money(perPerson),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: theme.colorScheme.primary,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      Text(
+                        passengers > 1
+                            ? trArgs(lang, 'total_for_n', {
+                                'n': '$passengers',
+                                'amount': money(perPerson * passengers),
+                              })
+                            : tr(lang, 'per_person_incl_tax'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
                     ],
                   ),
                 ),
                 FilledButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => PassengerScreen(flight: flight, cabinClass: cabinClass)),
-                  ),
+                  onPressed: onSelect,
                   child: Text(tr(lang, 'select')),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StepBanner extends StatelessWidget {
+  const _StepBanner({
+    required this.lang,
+    required this.step,
+    required this.title,
+    required this.outbound,
+  });
+
+  final String lang;
+  final int step;
+  final String title;
+  final FlightEntity? outbound;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: .55),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            trArgs(lang, 'step_of', {'n': '$step', 'total': '2'}),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(title, style: theme.textTheme.titleMedium),
+          if (outbound != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                AirlineLogo(
+                  airlineName: outbound!.airline,
+                  flightNumber: outbound!.flightNumber,
+                  size: 28,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${tr(lang, 'outbound_flight')}: ${outbound!.flightNumber} · '
+                    '${dateOf(outbound!.departureTime)} ${timeOf(outbound!.departureTime)}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -191,15 +364,22 @@ class _Point extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: right ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Text(time, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-          Text(code, style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            time,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+          ),
+          Text(
+            code,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  letterSpacing: .5,
+                ),
+          ),
         ],
       );
 }
 
-String _cabin(String lang, CabinClass c) => switch (c) {
-      CabinClass.economy => tr(lang, 'economy'),
-      CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
-      CabinClass.business => tr(lang, 'business'),
-      CabinClass.first => tr(lang, 'first'),
-    };
+

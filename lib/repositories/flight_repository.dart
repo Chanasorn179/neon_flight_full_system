@@ -1,5 +1,7 @@
-import '../data/mock_api.dart';
-import '../models/entities.dart';
+import '../data/offline_mock_api.dart';
+import '../models/travel_models.dart';
+import '../services/aviation_api_service.dart';
+import '../services/firebase_service.dart';
 
 abstract class FlightRepository {
   Future<List<AirportEntity>> airports();
@@ -7,10 +9,35 @@ abstract class FlightRepository {
   List<PromotionEntity> promotions();
 }
 
-class MockFlightRepository implements FlightRepository {
-  MockFlightRepository(this.api);
+class HybridFlightRepository implements FlightRepository {
+  HybridFlightRepository(this.api) : aviation = AviationApiService(api);
+
   final MockApi api;
-  @override Future<List<AirportEntity>> airports() async => api.airports;
-  @override Future<List<FlightEntity>> search(String from, String to, DateTime date) => api.searchFlights(from, to, date);
-  @override List<PromotionEntity> promotions() => api.promotions;
+  final AviationApiService aviation;
+
+  @override
+  Future<List<AirportEntity>> airports() async {
+    if (!FirebaseService.enabled) return api.airports;
+    try {
+      final remote = await FirebaseService.airports();
+      return remote.isEmpty ? api.airports : remote;
+    } catch (_) {
+      return api.airports;
+    }
+  }
+
+  @override
+  Future<List<FlightEntity>> search(
+    String from,
+    String to,
+    DateTime date,
+  ) =>
+      aviation.search(from, to, date);
+
+  @override
+  List<PromotionEntity> promotions() => api.promotions;
+}
+
+class MockFlightRepository extends HybridFlightRepository {
+  MockFlightRepository(super.api);
 }
