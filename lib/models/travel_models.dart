@@ -199,6 +199,7 @@ class BookingEntity {
     this.paymentStatus = PaymentStatus.pending,
     this.tripId,
     this.paymentLabel,
+    this.ticketToken,
   });
   final String id;
   final String userId;
@@ -218,17 +219,28 @@ class BookingEntity {
   /// Saved method used, e.g. "Visa •••• 1234" (display only).
   final String? paymentLabel;
 
+  /// Random token the server issues with the public ticket when payment is
+  /// confirmed. Null for unpaid bookings and tickets issued before it existed.
+  final String? ticketToken;
+
   bool get isPaid => paymentStatus == PaymentStatus.paid;
 
   BookingEntity withPaymentStatus(PaymentStatus value) =>
       _copy(paymentStatus: value);
+
+  BookingEntity withTicket(PaymentStatus value, String? token) =>
+      _copy(paymentStatus: value, ticketToken: token);
 
   BookingEntity withStatus(BookingStatus value) => _copy(status: value);
 
   /// Unpaid, not yet cancelled: the owner may still cancel it.
   bool get canCancel => !isPaid && status == BookingStatus.upcoming;
 
-  BookingEntity _copy({BookingStatus? status, PaymentStatus? paymentStatus}) =>
+  BookingEntity _copy({
+    BookingStatus? status,
+    PaymentStatus? paymentStatus,
+    String? ticketToken,
+  }) =>
       BookingEntity(
         id: id,
         userId: userId,
@@ -243,6 +255,7 @@ class BookingEntity {
         paymentStatus: paymentStatus ?? this.paymentStatus,
         tripId: tripId,
         paymentLabel: paymentLabel,
+        ticketToken: ticketToken ?? this.ticketToken,
       );
 }
 

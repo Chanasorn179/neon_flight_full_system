@@ -60,11 +60,12 @@ class _TicketScannerScreenState extends State<TicketScannerScreen> {
     }
 
     final bookingId = localResult.data!['bookingId']?.toString() ?? '';
+    final token = localResult.data!['token']?.toString() ?? '';
 
     try {
       // Only the server creates publicTickets, and only after payment is
       // confirmed, so a missing record means unpaid or forged.
-      final ticket = await FirebaseService.publicTicket(bookingId);
+      final ticket = await FirebaseService.publicTicket(bookingId, token);
 
       if (!mounted) return;
 

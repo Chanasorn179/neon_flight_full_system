@@ -112,6 +112,8 @@ test("locks cannot point at someone else's booking or be removed", async () => {
 test('user cannot create a booking that is already paid', async () => {
   await assertFails(bookWithLocks(alice(), booking({ paymentStatus: 'paid' })));
   await assertFails(bookWithLocks(alice(), booking({ paidAt: new Date() })));
+  // The ticket token is issued by the server; a client must not pick its own.
+  await assertFails(bookWithLocks(alice(), booking({ ticketToken: 'AAAAAAAAAAAAAAAA' })));
 });
 
 test('user cannot create a booking for someone else or under another ID', async () => {

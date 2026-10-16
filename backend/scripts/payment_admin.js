@@ -18,7 +18,7 @@
 
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const { publicDocumentId } = require('../ticket_token');
+const { newTicketToken, publicDocumentId } = require('../ticket_token');
 
 function text(value, fallback = '-') {
   const s = value == null ? '' : String(value).trim();
@@ -123,14 +123,16 @@ async function confirm(db, bookingId, confirmedBy = 'admin') {
       }
     }
     for (const leg of legs) {
+      const ticketToken = newTicketToken();
       tx.update(leg.ref, {
         paymentStatus: 'paid',
         paidAt: FieldValue.serverTimestamp(),
         paymentConfirmedBy: confirmedBy,
         ticketIssuedAt: FieldValue.serverTimestamp(),
+        ticketToken,
         updatedAt: FieldValue.serverTimestamp(),
       });
-      tx.set(db.collection('publicTickets').doc(publicDocumentId(leg.id)), {
+      tx.set(db.collection('publicTickets').doc(publicDocumentId(leg.id, ticketToken)), {
         ...publicTicketFor(leg.id, leg.data()),
         updatedAt: FieldValue.serverTimestamp(),
       });

@@ -286,6 +286,8 @@ BookingEntity _bookingFromMap(
     tripId: json['tripId']?.toString(),
 
     paymentLabel: json['paymentLabel']?.toString(),
+
+    ticketToken: json['ticketToken']?.toString(),
   );
 }
 

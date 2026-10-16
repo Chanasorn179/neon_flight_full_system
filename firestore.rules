@@ -73,7 +73,8 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny([
           'paidAt',
           'paymentConfirmedBy',
-          'ticketIssuedAt'
+          'ticketIssuedAt',
+          'ticketToken'
         ])
         && allSeatsLocked(request.resource.data);
 

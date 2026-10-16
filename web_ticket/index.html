@@ -138,7 +138,7 @@
         .trim()
         .toUpperCase();
 
-      if (!/^NF[A-Z0-9_-]+$/i.test(bookingId) || !/^[A-F0-9]{12}$/.test(token)) {
+      if (!/^NF[A-Z0-9_-]+$/i.test(bookingId) || !/^[A-F0-9]{12}(?:[A-F0-9]{4})?$/.test(token)) {
         fail('ลิงก์ตรวจสอบตั๋วไม่สมบูรณ์');
         return;
       }

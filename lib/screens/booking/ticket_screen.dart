@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -32,7 +33,27 @@ class _TicketScreenState extends State<TicketScreen> {
   final _shareButtonKey = GlobalKey();
   bool sharing = false;
 
-  BookingEntity get booking => widget.booking;
+  /// Updated live until the server confirms payment and issues the ticket
+  /// token the QR needs.
+  late BookingEntity booking = widget.booking;
+  StreamSubscription<({PaymentStatus status, String? token})>? _ticket;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!booking.isPaid) {
+      _ticket = FirebaseService.watchTicket(booking.id).listen((t) {
+        if (!mounted) return;
+        setState(() => booking = booking.withTicket(t.status, t.token));
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticket?.cancel();
+    super.dispose();
+  }
 
   /// Renders the boarding pass to PNG and opens the system share sheet,
   /// where the user can also save it to the device.
@@ -125,16 +146,12 @@ class _TicketScreenState extends State<TicketScreen> {
                     lang: lang,
                     // The QR only appears once the server has confirmed
                     // payment and issued the public ticket record.
-                    bottom: StreamBuilder<PaymentStatus>(
-                      stream: booking.isPaid
-                          ? null
-                          : FirebaseService.watchPaymentStatus(booking.id),
-                      initialData: booking.paymentStatus,
-                      builder: (context, snapshot) {
+                    bottom: Builder(
+                      builder: (context) {
                         if (booking.status == BookingStatus.cancelled) {
                           return const _CancelledNotice();
                         }
-                        if (snapshot.data != PaymentStatus.paid) {
+                        if (!booking.isPaid) {
                           return _PendingPayment(booking: booking);
                         }
                         return Column(

@@ -248,19 +248,28 @@ class FirebaseService {
   // firestore.rules rejects client writes to them.
   // ---------------------------------------------------------------------------
 
-  /// Emits the booking's payment status whenever it changes.
-  static Stream<PaymentStatus> watchPaymentStatus(String bookingId) {
-    if (!enabled) return const Stream<PaymentStatus>.empty();
+  /// Emits the booking's payment status, and the ticket token the server
+  /// issues on confirmation, whenever they change.
+  static Stream<({PaymentStatus status, String? token})> watchTicket(
+    String bookingId,
+  ) {
+    if (!enabled) {
+      return const Stream<({PaymentStatus status, String? token})>.empty();
+    }
 
     return firestore
         .collection('bookings')
         .doc(bookingId)
         .snapshots()
-        .map(
-          (doc) => doc.data()?['paymentStatus'] == PaymentStatus.pending.name
-              ? PaymentStatus.pending
-              : PaymentStatus.paid,
-        );
+        .map((doc) {
+          final data = doc.data();
+          return (
+            status: data?['paymentStatus'] == PaymentStatus.pending.name
+                ? PaymentStatus.pending
+                : PaymentStatus.paid,
+            token: data?['ticketToken']?.toString(),
+          );
+        });
   }
 
   /// Public payment settings set by the admin (appConfig/payment).
@@ -272,12 +281,15 @@ class FirebaseService {
 
   /// Reads the public verification record. Anyone may `get` a single ticket by
   /// its tokenized ID, so this works for staff scanning another user's ticket.
-  static Future<Map<String, dynamic>?> publicTicket(String bookingId) async {
+  static Future<Map<String, dynamic>?> publicTicket(
+    String bookingId,
+    String token,
+  ) async {
     if (!enabled) return null;
 
     final doc = await firestore
         .collection('publicTickets')
-        .doc(TicketQrService.publicDocumentId(bookingId))
+        .doc(TicketQrService.publicDocumentId(bookingId, token))
         .get();
 
     return doc.data();
