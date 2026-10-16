@@ -392,7 +392,7 @@ class _TopBar extends StatelessWidget {
                   [
                     ?legLabel,
                     flight.flightNumber,
-                    _cabin(lang, cabinClass),
+                    tr(lang, cabinClass.labelKey),
                   ].join(' · '),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: _Focus.muted,
@@ -965,9 +965,3 @@ class _CabinLayout {
   };
 }
 
-String _cabin(String lang, CabinClass cabinClass) => switch (cabinClass) {
-  CabinClass.economy => tr(lang, 'economy'),
-  CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
-  CabinClass.business => tr(lang, 'business'),
-  CabinClass.first => tr(lang, 'first'),
-};

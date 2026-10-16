@@ -180,23 +180,6 @@ class FirebaseService {
     return {for (final doc in snapshot.docs) doc.data()['seat'].toString()};
   }
 
-  static Future<Map<String, dynamic>?> bookingById(
-      String bookingId,
-      ) async {
-    if (!enabled) return null;
-
-    final doc = await firestore
-        .collection('bookings')
-        .doc(bookingId)
-        .get();
-
-    if (!doc.exists) return null;
-
-    return {
-      'id': doc.id,
-      ...?doc.data(),
-    };
-  }
 
   static Future<List<Map<String, dynamic>>> bookingsForUser(
       String userId,

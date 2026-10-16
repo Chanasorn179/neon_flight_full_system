@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme.dart';
+import '../../widgets/common_widgets.dart';
 import '../../core/app_localizations.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
@@ -123,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 8),
-                      const _BrandLogo(),
+                      const AppLogo(size: 108),
                       const SizedBox(height: 18),
                       Text(
                         'NEON FLIGHT',
@@ -211,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(height: 22),
-                              _InputLabel(
+                              FieldLabel(
                                 icon: Icons.email_outlined,
                                 text: 'Email',
                               ),
@@ -228,7 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              _InputLabel(
+                              FieldLabel(
                                 icon: Icons.lock_outline_rounded,
                                 text: 'Password',
                               ),
@@ -411,88 +412,6 @@ class _LoginScreenState extends State<LoginScreen> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
         borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.6),
-      ),
-    );
-  }
-}
-
-class _InputLabel extends StatelessWidget {
-  const _InputLabel({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 8),
-        Text(
-          text,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ],
-    );
-  }
-}
-
-class _BrandLogo extends StatelessWidget {
-  const _BrandLogo();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Container(
-        width: 108,
-        height: 108,
-        decoration: BoxDecoration(
-          gradient: AppTheme.heroGradient,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: theme.colorScheme.primary.withValues(alpha: .22),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Positioned(
-              bottom: 27,
-              child: Container(
-                width: 46,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .85),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 19,
-              child: Container(
-                width: 34,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .55),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ),
-            Transform.rotate(
-              angle: -.28,
-              child: const Icon(
-                Icons.flight_rounded,
-                color: Colors.white,
-                size: 42,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../core/app_localizations.dart';
+import '../../core/theme.dart';
 import '../../models/travel_models.dart';
 import '../../services/road_distance_service.dart';
 import '../../widgets/common_widgets.dart';
@@ -95,15 +96,11 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     }
   }
 
-  List<_TransferVehicle> _availableVehicles(_TransferLocation location) {
-    final vehicles = location.vehicles
-        .where((vehicle) => vehicle.status == _TransferStatus.available)
-        .toList();
-    if (reservation != null && vehicles.isNotEmpty) {
-      return vehicles.sublist(1);
-    }
-    return vehicles;
-  }
+  /// Free cars at the airport; the user's own booking takes one.
+  int _availableCars(_TransferLocation location) =>
+      reservation != null && location.availableCars > 0
+      ? location.availableCars - 1
+      : location.availableCars;
 
   double _distanceToAirportKm(
     _TransferLocation airport,
@@ -261,10 +258,7 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     }
 
     final pickupTime = departureTime.subtract(const Duration(hours: 3));
-    final availableVehicles = location.vehicles
-        .where((vehicle) => vehicle.status == _TransferStatus.available)
-        .toList();
-    if (availableVehicles.isEmpty) return;
+    if (location.availableCars == 0) return;
     final createdAt = DateTime.now();
     final booking = TransferBookingEntity(
       id: 'NT${createdAt.millisecondsSinceEpoch}',
@@ -349,7 +343,7 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     final location = _departureLocation;
     if (location == null) return const SizedBox.shrink();
 
-    final availableCount = _availableVehicles(location).length;
+    final availableCount = _availableCars(location);
     final distanceToAirportKm = currentLocation == null
         ? null
         : _effectiveDistanceKm(location, currentLocation!);
@@ -494,16 +488,17 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                               vertical: 7,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: .10),
+                              color: AppTheme.success(
+                                theme.brightness,
+                              ).withValues(alpha: .10),
                               borderRadius: BorderRadius.circular(99),
                             ),
                             child: Text(
                               '${tr(languageCode, 'transfer_available_remaining')} '
                               '$availableCount ${tr(languageCode, 'cars')}',
                               key: const ValueKey('transfer-available-count'),
-                              style: const TextStyle(
-                                color: Colors.green,
-                                fontSize: 11,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: AppTheme.success(theme.brightness),
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -593,14 +588,18 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: isWithinServiceArea
-                                ? Colors.green.withValues(alpha: .08)
+                                ? AppTheme.success(
+                                    theme.brightness,
+                                  ).withValues(alpha: .08)
                                 : theme.colorScheme.error.withValues(
                                     alpha: .07,
                                   ),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: isWithinServiceArea
-                                  ? Colors.green.withValues(alpha: .28)
+                                  ? AppTheme.success(
+                                      theme.brightness,
+                                    ).withValues(alpha: .28)
                                   : theme.colorScheme.error.withValues(
                                       alpha: .25,
                                     ),
@@ -613,7 +612,9 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                                 height: 42,
                                 decoration: BoxDecoration(
                                   color: isWithinServiceArea
-                                      ? Colors.green.withValues(alpha: .13)
+                                      ? AppTheme.success(
+                                          theme.brightness,
+                                        ).withValues(alpha: .13)
                                       : theme.colorScheme.error.withValues(
                                           alpha: .12,
                                         ),
@@ -624,7 +625,7 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                                       ? Icons.check_rounded
                                       : Icons.close_rounded,
                                   color: isWithinServiceArea
-                                      ? Colors.green
+                                      ? AppTheme.success(theme.brightness)
                                       : theme.colorScheme.error,
                                 ),
                               ),
@@ -642,7 +643,7 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
                                       ),
                                       style: TextStyle(
                                         color: isWithinServiceArea
-                                            ? Colors.green.shade700
+                                            ? AppTheme.success(theme.brightness)
                                             : theme.colorScheme.error,
                                         fontWeight: FontWeight.w900,
                                       ),
@@ -897,30 +898,6 @@ class _GpsLocationException implements Exception {
   final String messageKey;
 }
 
-enum _TransferStatus { available, pickingUp, droppingOff, unavailable }
-
-class _TransferVehicle {
-  const _TransferVehicle({
-    required this.name,
-    required this.model,
-    required this.driver,
-    required this.plateNumber,
-    required this.seats,
-    required this.status,
-    required this.icon,
-    this.etaMinutes = 0,
-  });
-
-  final String name;
-  final String model;
-  final String driver;
-  final String plateNumber;
-  final int seats;
-  final int etaMinutes;
-  final _TransferStatus status;
-  final IconData icon;
-}
-
 class _TransferLocation {
   const _TransferLocation({
     required this.code,
@@ -930,7 +907,7 @@ class _TransferLocation {
     required this.pickupTh,
     required this.latitude,
     required this.longitude,
-    required this.vehicles,
+    required this.availableCars,
   });
 
   final String code;
@@ -940,7 +917,7 @@ class _TransferLocation {
   final String pickupTh;
   final double latitude;
   final double longitude;
-  final List<_TransferVehicle> vehicles;
+  final int availableCars;
 }
 
 const _transferLocations = [
@@ -952,55 +929,7 @@ const _transferLocations = [
     pickupTh: 'ชั้น 1 ประตู 4',
     latitude: 13.681100,
     longitude: 100.747002,
-    vehicles: [
-      _TransferVehicle(
-        name: 'Neon Car 01',
-        model: 'Toyota Camry',
-        driver: 'สมชาย',
-        plateNumber: 'กข 4582',
-        seats: 3,
-        etaMinutes: 2,
-        status: _TransferStatus.available,
-        icon: Icons.local_taxi_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Car 05',
-        model: 'Honda Accord',
-        driver: 'มนัส',
-        plateNumber: 'ชล 7316',
-        seats: 3,
-        etaMinutes: 4,
-        status: _TransferStatus.available,
-        icon: Icons.directions_car_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Van 08',
-        model: 'Toyota Commuter',
-        driver: 'นที',
-        plateNumber: 'ฮว 9124',
-        seats: 8,
-        status: _TransferStatus.pickingUp,
-        icon: Icons.airport_shuttle_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon SUV 12',
-        model: 'Toyota Fortuner',
-        driver: 'อนันต์',
-        plateNumber: 'สญ 6631',
-        seats: 5,
-        status: _TransferStatus.droppingOff,
-        icon: Icons.directions_car_filled_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Van 15',
-        model: 'Hyundai H-1',
-        driver: 'กิตติ',
-        plateNumber: 'นข 2209',
-        seats: 7,
-        status: _TransferStatus.unavailable,
-        icon: Icons.airport_shuttle_rounded,
-      ),
-    ],
+    availableCars: 2,
   ),
   _TransferLocation(
     code: 'DMK',
@@ -1010,37 +939,7 @@ const _transferLocations = [
     pickupTh: 'อาคาร 2 ประตู 12',
     latitude: 13.914372,
     longitude: 100.605692,
-    vehicles: [
-      _TransferVehicle(
-        name: 'Neon DMK 17',
-        model: 'Toyota Camry',
-        driver: 'ณัฐพล',
-        plateNumber: 'กท 1717',
-        seats: 3,
-        etaMinutes: 3,
-        status: _TransferStatus.available,
-        icon: Icons.local_taxi_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon DMK 19',
-        model: 'Toyota Commuter',
-        driver: 'วีระ',
-        plateNumber: 'ฮม 1919',
-        seats: 8,
-        etaMinutes: 6,
-        status: _TransferStatus.available,
-        icon: Icons.airport_shuttle_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon DMK 22',
-        model: 'Honda CR-V',
-        driver: 'ธนกร',
-        plateNumber: 'ขม 2222',
-        seats: 5,
-        status: _TransferStatus.pickingUp,
-        icon: Icons.directions_car_filled_rounded,
-      ),
-    ],
+    availableCars: 2,
   ),
   _TransferLocation(
     code: 'CNX',
@@ -1050,36 +949,7 @@ const _transferLocations = [
     pickupTh: 'อาคารผู้โดยสารในประเทศ ประตู 2',
     latitude: 18.766800,
     longitude: 98.962601,
-    vehicles: [
-      _TransferVehicle(
-        name: 'Neon Car 21',
-        model: 'Toyota Altis',
-        driver: 'วิชัย',
-        plateNumber: 'กท 8821',
-        seats: 3,
-        etaMinutes: 3,
-        status: _TransferStatus.available,
-        icon: Icons.local_taxi_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Van 23',
-        model: 'Toyota Commuter',
-        driver: 'ประสิทธิ์',
-        plateNumber: 'ฮน 4420',
-        seats: 8,
-        status: _TransferStatus.pickingUp,
-        icon: Icons.airport_shuttle_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon SUV 25',
-        model: 'Honda CR-V',
-        driver: 'ศุภชัย',
-        plateNumber: 'ขจ 5190',
-        seats: 5,
-        status: _TransferStatus.unavailable,
-        icon: Icons.directions_car_filled_rounded,
-      ),
-    ],
+    availableCars: 1,
   ),
   _TransferLocation(
     code: 'HKT',
@@ -1089,37 +959,7 @@ const _transferLocations = [
     pickupTh: 'อาคารผู้โดยสารในประเทศ ประตู 1',
     latitude: 8.113257,
     longitude: 98.317400,
-    vehicles: [
-      _TransferVehicle(
-        name: 'Neon SUV 31',
-        model: 'Toyota Fortuner',
-        driver: 'ภูริ',
-        plateNumber: 'กม 7288',
-        seats: 5,
-        etaMinutes: 5,
-        status: _TransferStatus.available,
-        icon: Icons.directions_car_filled_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Van 34',
-        model: 'Hyundai H-1',
-        driver: 'ชาญ',
-        plateNumber: 'นข 3451',
-        seats: 7,
-        etaMinutes: 7,
-        status: _TransferStatus.available,
-        icon: Icons.airport_shuttle_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Car 36',
-        model: 'Toyota Camry',
-        driver: 'ธีรภัทร',
-        plateNumber: 'กต 6103',
-        seats: 3,
-        status: _TransferStatus.droppingOff,
-        icon: Icons.local_taxi_rounded,
-      ),
-    ],
+    availableCars: 2,
   ),
   _TransferLocation(
     code: 'NRT',
@@ -1129,37 +969,7 @@ const _transferLocations = [
     pickupTh: 'อาคาร 1 ฝั่งใต้',
     latitude: 35.768580,
     longitude: 140.388714,
-    vehicles: [
-      _TransferVehicle(
-        name: 'Neon Tokyo 41',
-        model: 'Toyota Crown',
-        driver: 'Haruto',
-        plateNumber: '成田 41-08',
-        seats: 3,
-        etaMinutes: 4,
-        status: _TransferStatus.available,
-        icon: Icons.local_taxi_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Tokyo 43',
-        model: 'Toyota Alphard',
-        driver: 'Ren',
-        plateNumber: '成田 43-12',
-        seats: 6,
-        etaMinutes: 6,
-        status: _TransferStatus.available,
-        icon: Icons.airport_shuttle_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Tokyo 46',
-        model: 'Nissan Serena',
-        driver: 'Sota',
-        plateNumber: '成田 46-27',
-        seats: 6,
-        status: _TransferStatus.pickingUp,
-        icon: Icons.directions_car_filled_rounded,
-      ),
-    ],
+    availableCars: 2,
   ),
   _TransferLocation(
     code: 'ICN',
@@ -1169,36 +979,7 @@ const _transferLocations = [
     pickupTh: 'อาคาร 1 ประตู 7',
     latitude: 37.469101,
     longitude: 126.450996,
-    vehicles: [
-      _TransferVehicle(
-        name: 'Neon Seoul 51',
-        model: 'Hyundai Grandeur',
-        driver: 'Min-jun',
-        plateNumber: '인천 51가 8210',
-        seats: 3,
-        etaMinutes: 5,
-        status: _TransferStatus.available,
-        icon: Icons.local_taxi_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Seoul 53',
-        model: 'Kia Carnival',
-        driver: 'Ji-ho',
-        plateNumber: '인천 53나 4108',
-        seats: 7,
-        status: _TransferStatus.droppingOff,
-        icon: Icons.airport_shuttle_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon Seoul 55',
-        model: 'Hyundai Staria',
-        driver: 'Seo-jun',
-        plateNumber: '인천 55다 2291',
-        seats: 7,
-        status: _TransferStatus.unavailable,
-        icon: Icons.directions_car_filled_rounded,
-      ),
-    ],
+    availableCars: 1,
   ),
   _TransferLocation(
     code: 'SIN',
@@ -1208,36 +989,6 @@ const _transferLocations = [
     pickupTh: 'อาคาร 3 จุดรับผู้โดยสารขาเข้า',
     latitude: 1.350190,
     longitude: 103.994003,
-    vehicles: [
-      _TransferVehicle(
-        name: 'Neon SG 61',
-        model: 'Mercedes-Benz E-Class',
-        driver: 'Daniel',
-        plateNumber: 'SNG 6108',
-        seats: 3,
-        etaMinutes: 3,
-        status: _TransferStatus.available,
-        icon: Icons.local_taxi_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon SG 64',
-        model: 'Toyota Alphard',
-        driver: 'Wei Ming',
-        plateNumber: 'SNG 6412',
-        seats: 6,
-        etaMinutes: 6,
-        status: _TransferStatus.available,
-        icon: Icons.airport_shuttle_rounded,
-      ),
-      _TransferVehicle(
-        name: 'Neon SG 67',
-        model: 'Hyundai Staria',
-        driver: 'Arjun',
-        plateNumber: 'SNG 6725',
-        seats: 7,
-        status: _TransferStatus.pickingUp,
-        icon: Icons.directions_car_filled_rounded,
-      ),
-    ],
+    availableCars: 2,
   ),
 ];

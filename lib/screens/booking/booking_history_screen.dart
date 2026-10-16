@@ -390,7 +390,7 @@ class _FlightBookingCard extends StatelessWidget {
                   Expanded(
                     child: _FlightMeta(
                       label: tr(languageCode, 'class'),
-                      value: _cabin(languageCode, booking.cabinClass),
+                      value: tr(languageCode, booking.cabinClass.labelKey),
                     ),
                   ),
                   Expanded(
@@ -653,8 +653,7 @@ class _ProgressStep extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 11,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: active
                     ? theme.colorScheme.primary
                     : theme.colorScheme.onSurfaceVariant,
@@ -762,7 +761,7 @@ class _FlightMeta extends StatelessWidget {
 Color _statusColor(BuildContext context, BookingStatus status) {
   return switch (status) {
     BookingStatus.upcoming => Theme.of(context).colorScheme.primary,
-    BookingStatus.completed => Colors.green,
+    BookingStatus.completed => AppTheme.success(Theme.of(context).brightness),
     BookingStatus.cancelled => Theme.of(context).colorScheme.error,
   };
 }
@@ -851,9 +850,9 @@ Color _transferPhaseColor(
 ) {
   return switch (phase) {
     _TransferPhase.scheduled => Theme.of(context).colorScheme.primary,
-    _TransferPhase.driverOnWay => Colors.orange,
-    _TransferPhase.onTheWay => Colors.blue,
-    _TransferPhase.arrived => Colors.green,
+    _TransferPhase.driverOnWay => AppTheme.warning(Theme.of(context).brightness),
+    _TransferPhase.onTheWay => AppTheme.info(Theme.of(context).brightness),
+    _TransferPhase.arrived => AppTheme.success(Theme.of(context).brightness),
     _TransferPhase.cancelled => Theme.of(context).colorScheme.error,
   };
 }
@@ -873,11 +872,5 @@ String _transferStepLabel(String lang, int step) => tr(lang, switch (step) {
   _ => 'transfer_step_arrived',
 });
 
-String _cabin(String lang, CabinClass c) => switch (c) {
-  CabinClass.economy => tr(lang, 'economy'),
-  CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
-  CabinClass.business => tr(lang, 'business'),
-  CabinClass.first => tr(lang, 'first'),
-};
 
 enum _TransferPhase { scheduled, driverOnWay, onTheWay, arrived, cancelled }

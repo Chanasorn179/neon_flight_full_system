@@ -108,10 +108,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  void clearError() {
-    error = null;
-    notifyListeners();
-  }
 
   void setRemember(bool value) {
     rememberMe = value;

@@ -9,7 +9,6 @@ import 'providers/flight_provider.dart';
 import 'providers/language_provider.dart';
 import 'providers/payment_methods_provider.dart';
 import 'providers/settings_provider.dart';
-import 'providers/theme_provider.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/booking_repository.dart';
 import 'repositories/flight_repository.dart';
@@ -63,10 +62,6 @@ Future<void> main() async {
         ChangeNotifierProvider(
           create: (_) =>
               PaymentMethodsProvider(),
-        ),
-
-        ChangeNotifierProvider(
-          create: (_) => ThemeProvider(),
         ),
       ],
       child: const NeonFlightApp(),

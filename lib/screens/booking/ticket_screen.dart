@@ -214,12 +214,6 @@ class _TicketScreenState extends State<TicketScreen> {
   }
 }
 
-String _cabin(String lang, CabinClass c) => switch (c) {
-  CabinClass.economy => tr(lang, 'economy'),
-  CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
-  CabinClass.business => tr(lang, 'business'),
-  CabinClass.first => tr(lang, 'first'),
-};
 
 class _BoardingPass extends StatelessWidget {
   const _BoardingPass({
@@ -288,7 +282,7 @@ class _BoardingPass extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '${flight.flightNumber} · ${_cabin(lang, booking.cabinClass)}',
+                            '${flight.flightNumber} · ${tr(lang, booking.cabinClass.labelKey)}',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: onHeader.withValues(alpha: .85),
                             ),

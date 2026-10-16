@@ -11,17 +11,12 @@ enum PaymentMethod { promptPay, card, mobileBanking }
 enum PaymentStatus { pending, paid }
 
 extension CabinClassX on CabinClass {
-  String get labelEn => switch (this) {
-    CabinClass.economy => 'Economy',
-    CabinClass.premiumEconomy => 'Premium Economy',
-    CabinClass.business => 'Business',
-    CabinClass.first => 'First Class',
-  };
-  String get labelTh => switch (this) {
-    CabinClass.economy => 'ชั้นประหยัด',
-    CabinClass.premiumEconomy => 'ชั้นประหยัดพรีเมียม',
-    CabinClass.business => 'ชั้นธุรกิจ',
-    CabinClass.first => 'ชั้นหนึ่ง',
+  /// Translation key for the cabin name (use with `tr`).
+  String get labelKey => switch (this) {
+    CabinClass.economy => 'economy',
+    CabinClass.premiumEconomy => 'premium_economy',
+    CabinClass.business => 'business',
+    CabinClass.first => 'first',
   };
   double get multiplier => switch (this) {
     CabinClass.economy => 1,

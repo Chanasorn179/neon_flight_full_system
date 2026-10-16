@@ -490,7 +490,7 @@ class _CabinDropdown extends StatelessWidget {
           .map(
             (c) => DropdownMenuItem(
               value: c,
-              child: Text(_cabin(lang, c), overflow: TextOverflow.ellipsis),
+              child: Text(tr(lang, c.labelKey), overflow: TextOverflow.ellipsis),
             ),
           )
           .toList(),
@@ -630,22 +630,40 @@ class _StepCircleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onTap != null;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Ink(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: enabled
-              ? enabledColor.withValues(alpha: .12)
-              : Colors.grey.withValues(alpha: .12),
-        ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: enabled ? enabledColor : Colors.grey,
+    final colors = Theme.of(context).colorScheme;
+    final lang = context.watch<LanguageProvider>().languageCode;
+    // 34dp visual circle inside a 48dp touch target.
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: tr(lang, icon == Icons.remove_rounded || icon == Icons.remove
+          ? 'decrease'
+          : 'increase'),
+      excludeSemantics: true,
+      child: SizedBox.square(
+        dimension: 48,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Center(
+            child: Ink(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: enabled
+                    ? enabledColor.withValues(alpha: .12)
+                    : colors.onSurface.withValues(alpha: .08),
+              ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: enabled
+                    ? enabledColor
+                    : colors.onSurface.withValues(alpha: .38),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -755,7 +773,7 @@ class _PromoCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  _cabin(lang, promo.cabinClass),
+                  tr(lang, promo.cabinClass.labelKey),
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
@@ -927,9 +945,3 @@ class _DestinationChip extends StatelessWidget {
   }
 }
 
-String _cabin(String lang, CabinClass c) => switch (c) {
-  CabinClass.economy => tr(lang, 'economy'),
-  CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
-  CabinClass.business => tr(lang, 'business'),
-  CabinClass.first => tr(lang, 'first'),
-};

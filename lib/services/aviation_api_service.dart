@@ -20,31 +20,6 @@ class AviationApiService {
     defaultValue: true,
   );
 
-  Future<bool> liveApiReady() async {
-    try {
-      final response = await http
-          .get(
-        Uri.parse('$apiBaseUrl/health'),
-      )
-          .timeout(
-        const Duration(seconds: 8),
-      );
-
-      if (response.statusCode != 200) {
-        return false;
-      }
-
-      final decoded = jsonDecode(response.body);
-
-      if (decoded is! Map<String, dynamic>) {
-        return false;
-      }
-
-      return decoded['aviationConfigured'] == true;
-    } catch (_) {
-      return false;
-    }
-  }
 
   Future<List<FlightEntity>> search(
       String from,

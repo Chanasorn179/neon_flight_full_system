@@ -202,7 +202,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 : tr(lang, 'outbound_flight'),
             flight: widget.flight,
             seats: widget.seats,
-            cabin: _cabin(lang, widget.cabinClass),
+            cabin: tr(lang, widget.cabinClass.labelKey),
             lang: lang,
           ),
           if (widget.returnFlight != null) ...[
@@ -211,7 +211,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               label: tr(lang, 'return_flight'),
               flight: widget.returnFlight!,
               seats: widget.returnSeats,
-              cabin: _cabin(lang, widget.cabinClass),
+              cabin: tr(lang, widget.cabinClass.labelKey),
               lang: lang,
             ),
           ],
@@ -787,9 +787,3 @@ class _QrPayPanelState extends State<_QrPayPanel> {
   }
 }
 
-String _cabin(String lang, CabinClass c) => switch (c) {
-  CabinClass.economy => tr(lang, 'economy'),
-  CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
-  CabinClass.business => tr(lang, 'business'),
-  CabinClass.first => tr(lang, 'first'),
-};

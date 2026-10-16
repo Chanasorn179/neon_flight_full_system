@@ -21,7 +21,6 @@ import 'package:mini_projects/providers/flight_provider.dart';
 import 'package:mini_projects/providers/language_provider.dart';
 import 'package:mini_projects/providers/payment_methods_provider.dart';
 import 'package:mini_projects/providers/settings_provider.dart';
-import 'package:mini_projects/providers/theme_provider.dart';
 import 'package:mini_projects/repositories/auth_repository.dart';
 import 'package:mini_projects/repositories/booking_repository.dart';
 import 'package:mini_projects/repositories/flight_repository.dart';
@@ -149,7 +148,6 @@ void main() {
             ChangeNotifierProvider.value(value: flights),
             ChangeNotifierProvider.value(value: bookings),
             ChangeNotifierProvider.value(value: methods),
-            ChangeNotifierProvider(create: (_) => ThemeProvider()),
           ],
           child: MaterialApp(
             debugShowCheckedModeBanner: false,

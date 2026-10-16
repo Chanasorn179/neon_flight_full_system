@@ -20,38 +20,54 @@ class AppTheme {
   static Color pendingForeground(Brightness b) =>
       b == Brightness.dark ? const Color(0xFFFFD58A) : const Color(0xFF6B4300);
 
+  /// Status text/icon colors that keep >= 4.5:1 on the app surfaces in both
+  /// themes. Use these instead of raw Colors.green / orange / blue.
+  static Color success(Brightness b) =>
+      b == Brightness.dark ? const Color(0xFF7FDB9C) : const Color(0xFF1B7A3A);
+  static Color warning(Brightness b) =>
+      b == Brightness.dark ? const Color(0xFFFFBE6B) : const Color(0xFF8F5200);
+  static Color info(Brightness b) =>
+      b == Brightness.dark ? const Color(0xFF8DB4FF) : const Color(0xFF1F55C9);
+
   static ThemeData get light => _build(Brightness.light);
   static ThemeData get dark => _build(Brightness.dark);
 
   static ThemeData _build(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
-    final scheme = ColorScheme.fromSeed(
-      seedColor: isDark ? _darkSeed : _lightSeed,
-      brightness: brightness,
-      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-    ).copyWith(
-      // Cyan accent: the "neon" in the brand, used for gradients and highlights.
-      tertiary: isDark ? const Color(0xFF5FE0F0) : const Color(0xFF0091A8),
-      onTertiary: isDark ? const Color(0xFF00363D) : Colors.white,
-      surface: isDark ? const Color(0xFF141820) : const Color(0xFFFBFCFF),
-      surfaceContainerLowest:
-          isDark ? const Color(0xFF0D1016) : const Color(0xFFFFFFFF),
-      surfaceContainerLow:
-          isDark ? const Color(0xFF181D26) : const Color(0xFFF7F9FD),
-      surfaceContainer:
-          isDark ? const Color(0xFF1D222C) : const Color(0xFFF1F4FA),
-      surfaceContainerHigh:
-          isDark ? const Color(0xFF242A35) : const Color(0xFFEAEFF7),
-      outlineVariant:
-          isDark ? const Color(0xFF353C49) : const Color(0xFFDCE2EC),
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: isDark ? _darkSeed : _lightSeed,
+          brightness: brightness,
+          dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+        ).copyWith(
+          // Cyan accent: the "neon" in the brand, used for gradients and highlights.
+          tertiary: isDark ? const Color(0xFF5FE0F0) : const Color(0xFF0091A8),
+          onTertiary: isDark ? const Color(0xFF00363D) : Colors.white,
+          surface: isDark ? const Color(0xFF141820) : const Color(0xFFFBFCFF),
+          surfaceContainerLowest: isDark
+              ? const Color(0xFF0D1016)
+              : const Color(0xFFFFFFFF),
+          surfaceContainerLow: isDark
+              ? const Color(0xFF181D26)
+              : const Color(0xFFF7F9FD),
+          surfaceContainer: isDark
+              ? const Color(0xFF1D222C)
+              : const Color(0xFFF1F4FA),
+          surfaceContainerHigh: isDark
+              ? const Color(0xFF242A35)
+              : const Color(0xFFEAEFF7),
+          outlineVariant: isDark
+              ? const Color(0xFF353C49)
+              : const Color(0xFFDCE2EC),
+        );
 
     final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
-      scaffoldBackgroundColor:
-          isDark ? const Color(0xFF0D1016) : const Color(0xFFF5F7FB),
+      scaffoldBackgroundColor: isDark
+          ? const Color(0xFF0D1016)
+          : const Color(0xFFF5F7FB),
       canvasColor: isDark ? const Color(0xFF0D1016) : const Color(0xFFF5F7FB),
       splashFactory: InkSparkle.splashFactory,
       visualDensity: VisualDensity.standard,
@@ -108,9 +124,12 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surfaceContainerLow,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 17,
+        ),
         labelStyle: TextStyle(color: scheme.onSurfaceVariant),
-        hintStyle: TextStyle(color: scheme.onSurfaceVariant.withValues(alpha: .7)),
+        hintStyle: TextStyle(color: scheme.onSurfaceVariant),
         prefixIconColor: scheme.onSurfaceVariant,
         suffixIconColor: scheme.onSurfaceVariant,
         border: OutlineInputBorder(
@@ -137,27 +156,35 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size(0, 50),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(17),
+          ),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(0, 50),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(17),
+          ),
           side: BorderSide(color: scheme.outline),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       ),
       chipTheme: base.chipTheme.copyWith(
@@ -165,7 +192,10 @@ class AppTheme {
         selectedColor: scheme.primaryContainer,
         side: BorderSide(color: scheme.outlineVariant),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-        labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600),
+        labelStyle: TextStyle(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       dividerTheme: DividerThemeData(
         color: scheme.outlineVariant.withValues(alpha: .75),
@@ -173,9 +203,10 @@ class AppTheme {
         space: 1,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        height: 74,
+        height: 72,
         elevation: 0,
         backgroundColor: scheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
         indicatorColor: scheme.primaryContainer,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
@@ -217,7 +248,9 @@ class AppTheme {
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
-          side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant)),
+          side: WidgetStatePropertyAll(
+            BorderSide(color: scheme.outlineVariant),
+          ),
         ),
       ),
       switchTheme: SwitchThemeData(
@@ -233,10 +266,45 @@ class AppTheme {
       checkboxTheme: CheckboxThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
       ),
+      // Android predictive Back + Material motion; instant cut when the
+      // system "Remove animations" setting is on.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _MotionAwareTransitions(
+            PredictiveBackPageTransitionsBuilder(),
+          ),
+        },
+      ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: scheme.primary,
         linearTrackColor: scheme.surfaceContainerHigh,
       ),
+    );
+  }
+}
+
+/// Wraps a page transition so it is skipped when the OS asks for reduced
+/// motion (Android "Remove animations", iOS "Reduce Motion").
+class _MotionAwareTransitions extends PageTransitionsBuilder {
+  const _MotionAwareTransitions(this.inner);
+
+  final PageTransitionsBuilder inner;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    return inner.buildTransitions(
+      route,
+      context,
+      animation,
+      secondaryAnimation,
+      child,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_localizations.dart';
+import '../../core/theme.dart';
 import '../../data/fares.dart';
 import '../../data/thai_airlines.dart';
 import '../../models/travel_models.dart';
@@ -164,6 +165,12 @@ class FlightCard extends StatelessWidget {
     final m = flight.duration.inMinutes.remainder(60);
     final airline = airlineForFlight(flight.airline, flight.flightNumber);
     final passengers = context.watch<FlightProvider>().passengerCount;
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final fewSeats = flight.availableSeats < 6;
+    final seatColor = fewSeats
+        ? theme.colorScheme.error
+        : AppTheme.success(theme.brightness);
     // What the passenger actually pays per seat: fare + airport tax.
     final perPerson = flight.price(cabinClass) +
         passengerServiceCharge(flight.departure, flight.arrival);
@@ -188,15 +195,32 @@ class FlightCard extends StatelessWidget {
                         airline == null
                             ? flight.airline
                             : (lang == 'th' ? airline.nameTh : airline.nameEn),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                      Text(flight.flightNumber),
+                      Text(
+                        flight.flightNumber,
+                        style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      ),
                     ],
                   ),
                 ),
-                Text(
-                  '${flight.availableSeats} ${tr(lang, 'seats')}',
-                  style: TextStyle(color: flight.availableSeats < 6 ? Colors.red : Colors.green),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: seatColor.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${flight.availableSeats} ${tr(lang, 'seats')}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: seatColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -207,9 +231,17 @@ class FlightCard extends StatelessWidget {
                 Expanded(
                   child: Column(
                     children: [
-                      Text('$h ${tr(lang, 'hours')} $m ${tr(lang, 'minutes')}', style: Theme.of(context).textTheme.labelSmall),
-                      const Icon(Icons.flight_takeoff),
-                      Text(tr(lang, 'direct'), style: const TextStyle(fontSize: 12)),
+                      Text(
+                        '$h ${tr(lang, 'hours')} $m ${tr(lang, 'minutes')}',
+                        style: theme.textTheme.labelMedium?.copyWith(color: muted),
+                      ),
+                      const SizedBox(height: 2),
+                      Icon(Icons.flight_rounded, color: theme.colorScheme.primary),
+                      const SizedBox(height: 2),
+                      Text(
+                        tr(lang, 'direct'),
+                        style: theme.textTheme.labelMedium?.copyWith(color: muted),
+                      ),
                     ],
                   ),
                 ),
@@ -223,10 +255,17 @@ class FlightCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_cabin(lang, cabinClass)),
+                      Text(
+                        tr(lang, cabinClass.labelKey),
+                        style: theme.textTheme.labelLarge?.copyWith(color: muted),
+                      ),
                       Text(
                         money(perPerson),
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: theme.colorScheme.primary,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
                       Text(
                         passengers > 1
@@ -325,16 +364,22 @@ class _Point extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: right ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Text(time, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-          Text(code, style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            time,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+          ),
+          Text(
+            code,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  letterSpacing: .5,
+                ),
+          ),
         ],
       );
 }
 
-String _cabin(String lang, CabinClass c) => switch (c) {
-      CabinClass.economy => tr(lang, 'economy'),
-      CabinClass.premiumEconomy => tr(lang, 'premium_economy'),
-      CabinClass.business => tr(lang, 'business'),
-      CabinClass.first => tr(lang, 'first'),
-    };
 

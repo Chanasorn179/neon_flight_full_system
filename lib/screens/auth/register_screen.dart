@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme.dart';
+import '../../widgets/common_widgets.dart';
 import '../../core/app_localizations.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
@@ -115,12 +115,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: IconButton.filledTonal(
+                          tooltip: tr(lang, 'back'),
                           onPressed: () => Navigator.of(context).pop(),
                           icon: const Icon(Icons.arrow_back_rounded),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const _RegisterLogo(),
+                      const AppLogo(),
                       const SizedBox(height: 18),
                       Text(
                         tr(lang, 'register_title'),
@@ -160,7 +161,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _FieldCaption(
+                            FieldLabel(
                               icon: Icons.person_outline_rounded,
                               text: tr(lang, 'full_name'),
                             ),
@@ -174,7 +175,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            const _FieldCaption(
+                            const FieldLabel(
                               icon: Icons.email_outlined,
                               text: 'Email',
                             ),
@@ -190,7 +191,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            _FieldCaption(
+                            FieldLabel(
                               icon: Icons.lock_outline_rounded,
                               text: tr(lang, 'password_min'),
                             ),
@@ -219,7 +220,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            _FieldCaption(
+                            FieldLabel(
                               icon: Icons.verified_user_outlined,
                               text: tr(lang, 'confirm_password'),
                             ),
@@ -338,52 +339,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _RegisterLogo extends StatelessWidget {
-  const _RegisterLogo();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Center(
-      child: Container(
-        width: 92,
-        height: 92,
-        decoration: BoxDecoration(
-          gradient: AppTheme.heroGradient,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: colors.primary.withValues(alpha: .2),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: const Icon(Icons.flight_takeoff_rounded, color: Colors.white, size: 42),
-      ),
-    );
-  }
-}
-
-class _FieldCaption extends StatelessWidget {
-  const _FieldCaption({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: colors.primary),
-        const SizedBox(width: 8),
-        Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
-      ],
     );
   }
 }

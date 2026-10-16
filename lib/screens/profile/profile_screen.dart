@@ -367,6 +367,7 @@ class _Header extends StatelessWidget {
                 ),
               ),
               IconButton(
+                tooltip: tr(lang, 'edit_profile'),
                 onPressed: onEdit,
                 icon: const Icon(Icons.edit_outlined, color: Colors.white),
               ),

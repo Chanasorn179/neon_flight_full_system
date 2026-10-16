@@ -30,7 +30,6 @@ class FlightProvider extends ChangeNotifier {
 
   Future<void> loadAirports() async { airports = await repository.airports(); notifyListeners(); }
   void setRoute(String f, String t) { from = f; to = t; notifyListeners(); }
-  void swapRoute() { final v = from; from = to; to = v; notifyListeners(); }
   void setDeparture(DateTime value) {
     departureDate = value;
     // Keep the return date on or after departure.
