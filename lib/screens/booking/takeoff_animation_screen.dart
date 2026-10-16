@@ -58,6 +58,9 @@ const _passEnd = .20;
 const _globeStart = .16;
 const _globeEnd = .80;
 const _mapStart = .76;
+const _mapPreloadStart = .5;
+
+const _space = Color(0xFF05070C);
 
 class _TakeoffScreenState extends State<TakeoffScreen>
     with SingleTickerProviderStateMixin {
@@ -71,6 +74,13 @@ class _TakeoffScreenState extends State<TakeoffScreen>
 
   bool _done = false;
   _GlobeAssets? _globe;
+
+  // Built once; rebuilding FlutterMap every animation frame is expensive.
+  late final Widget? _map =
+      switch (airportCoordinates[widget.flight.arrival.code]) {
+        final at? => _AirportTiles(at: at),
+        null => null,
+      };
 
   @override
   void initState() {
@@ -140,27 +150,40 @@ class _TakeoffScreenState extends State<TakeoffScreen>
             return Stack(
               fit: StackFit.expand,
               children: [
+                // Fades are drawn as a dark overlay instead of Opacity: an
+                // Opacity over a full-screen shader or map costs an offscreen
+                // layer every frame.
                 if (globeOpacity > 0)
-                  Opacity(
-                    opacity: globeOpacity,
-                    child: CustomPaint(
-                      painter: _GlobePainter(
-                        assets: _globe,
-                        from: f.departure,
-                        to: f.arrival,
-                        progress: globeT,
-                        lang: lang,
-                      ),
+                  CustomPaint(
+                    painter: _GlobePainter(
+                      assets: _globe,
+                      from: f.departure,
+                      to: f.arrival,
+                      progress: globeT,
+                      lang: lang,
+                      opacity: globeOpacity,
                     ),
                   ),
-                if (mapOpacity > 0 && dest != null)
-                  Opacity(
-                    opacity: mapOpacity,
-                    child: _DestinationMap(
-                      airport: f.arrival,
-                      at: dest,
-                      progress: mapT,
-                      lang: lang,
+                // Built from mid-flight so the tiles are loaded before the
+                // map fades in.
+                if (dest != null && t >= _mapPreloadStart)
+                  Offstage(
+                    offstage: mapOpacity <= 0,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _DestinationMap(
+                          airport: f.arrival,
+                          map: _map!,
+                          progress: mapT,
+                          lang: lang,
+                        ),
+                        IgnorePointer(
+                          child: ColoredBox(
+                            color: _space.withValues(alpha: 1 - mapOpacity),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 if (passOpacity > 0)
@@ -194,8 +217,8 @@ class _TakeoffScreenState extends State<TakeoffScreen>
                     child: Text(
                       'Imagery: NASA Earth Observatory',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: .45),
-                        fontSize: 10,
+                        color: Colors.white.withValues(alpha: .7),
+                        fontSize: 11,
                       ),
                     ),
                   ),
@@ -307,104 +330,100 @@ class _MiniPass extends StatelessWidget {
       color: Colors.white,
     );
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          width: 300,
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: .14),
-                Colors.white.withValues(alpha: .05),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Colors.white.withValues(alpha: .18)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    // Only dark space sits behind the pass, so a backdrop blur adds nothing
+    // but a per-frame cost.
+    return Container(
+      width: 300,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: .14),
+            Colors.white.withValues(alpha: .05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: .18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  AirlineLogo(
-                    airlineName: flight.airline,
-                    flightNumber: flight.flightNumber,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(flight.flightNumber, style: value),
-                  const Spacer(),
-                  Text(dateOf(flight.departureTime), style: label),
-                ],
+              AirlineLogo(
+                airlineName: flight.airline,
+                flightNumber: flight.flightNumber,
+                size: 28,
               ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Text(
-                    flight.departure.code,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Icon(Icons.flight_rounded, color: Colors.white70),
-                    ),
-                  ),
-                  Text(
-                    flight.arrival.code,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 8),
+              Text(flight.flightNumber, style: value),
+              const Spacer(),
+              Text(dateOf(flight.departureTime), style: label),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Text(
+                flight.departure.code,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('SEAT', style: label),
-                      Text(seats.join(', '), style: value),
-                    ],
-                  ),
-                  const Spacer(),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('BOARDING', style: label),
-                      Text(
-                        timeOf(
-                          flight.departureTime.subtract(
-                            const Duration(minutes: 30),
-                          ),
-                        ),
-                        style: value,
-                      ),
-                    ],
-                  ),
-                ],
+              const Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(Icons.flight_rounded, color: Colors.white70),
+                ),
               ),
-              const SizedBox(height: 14),
-              SizedBox(
-                height: 34,
-                child: CustomPaint(
-                  size: const Size(double.infinity, 34),
-                  painter: _BarcodePainter(seed: flight.flightNumber.hashCode),
+              Text(
+                flight.arrival.code,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SEAT', style: label),
+                  Text(seats.join(', '), style: value),
+                ],
+              ),
+              const Spacer(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('BOARDING', style: label),
+                  Text(
+                    timeOf(
+                      flight.departureTime.subtract(
+                        const Duration(minutes: 30),
+                      ),
+                    ),
+                    style: value,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 34,
+            child: CustomPaint(
+              size: const Size(double.infinity, 34),
+              painter: _BarcodePainter(seed: flight.flightNumber.hashCode),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -449,38 +468,30 @@ class _FlightStatus extends StatelessWidget {
     final remaining = Duration(
       minutes: (flight.duration.inMinutes * (1 - progress)).round(),
     );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .08),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: .14)),
+    // Tinted instead of blurred: a backdrop blur over the globe shader is
+    // re-run every frame.
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E1A2E).withValues(alpha: .78),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: .14)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            '${flight.departure.code}  →  ${flight.arrival.code}',
+            style: theme.textTheme.titleMedium?.copyWith(color: Colors.white),
           ),
-          child: Row(
-            children: [
-              Text(
-                '${flight.departure.code}  →  ${flight.arrival.code}',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                trArgs(lang, 'time_remaining', {
-                  'h': '${remaining.inHours}',
-                  'm': '${remaining.inMinutes.remainder(60)}',
-                }),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.white70,
-                ),
-              ),
-            ],
+          const Spacer(),
+          Text(
+            trArgs(lang, 'time_remaining', {
+              'h': '${remaining.inHours}',
+              'm': '${remaining.inMinutes.remainder(60)}',
+            }),
+            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -521,6 +532,7 @@ class _GlobePainter extends CustomPainter {
     required this.to,
     required this.progress,
     required this.lang,
+    this.opacity = 1,
   });
 
   final _GlobeAssets? assets;
@@ -529,20 +541,30 @@ class _GlobePainter extends CustomPainter {
   final double progress;
   final String lang;
 
+  /// Fade toward the space background, painted as an overlay.
+  final double opacity;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _paintScene(canvas, size);
+    if (opacity < 1) {
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()..color = _space.withValues(alpha: 1 - opacity),
+      );
+    }
+  }
+
   static const _plane = Icons.flight_rounded;
 
   /// How far along the route the plane is for a given globe-phase progress.
   static double flyProgress(double p) =>
       Curves.easeInOutSine.transform(((p - .18) / .62).clamp(0.0, 1.0));
 
-  @override
-  void paint(Canvas canvas, Size size) {
+  void _paintScene(Canvas canvas, Size size) {
     final a = airportCoordinates[from.code];
     final b = airportCoordinates[to.code];
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = const Color(0xFF05070C),
-    );
+    canvas.drawRect(Offset.zero & size, Paint()..color = _space);
     _stars(canvas, size);
     if (a == null || b == null) return;
 
@@ -740,7 +762,10 @@ class _GlobePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _GlobePainter old) =>
-      old.progress != progress || old.assets != assets || old.lang != lang;
+      old.progress != progress ||
+      old.assets != assets ||
+      old.lang != lang ||
+      old.opacity != opacity;
 }
 
 /// Street map of the real destination airport (OpenStreetMap), slowly
@@ -748,20 +773,21 @@ class _GlobePainter extends CustomPainter {
 class _DestinationMap extends StatelessWidget {
   const _DestinationMap({
     required this.airport,
-    required this.at,
+    required this.map,
     required this.progress,
     required this.lang,
   });
 
   final AirportEntity airport;
-  final (double, double) at;
+
+  /// The tile map, built once by the screen.
+  final Widget map;
   final double progress;
   final String lang;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final point = LatLng(at.$1, at.$2);
     final city = lang == 'th' ? airport.cityTh : airport.cityEn;
     final name = lang == 'th' ? airport.nameTh : airport.nameEn;
 
@@ -770,79 +796,36 @@ class _DestinationMap extends StatelessWidget {
       children: [
         Transform.scale(
           scale: 1 + Curves.easeOut.transform(progress) * .35,
-          child: FlutterMap(
-            options: MapOptions(
-              initialCenter: point,
-              initialZoom: 12.5,
-              interactionOptions: const InteractionOptions(
-                flags: InteractiveFlag.none,
-              ),
-              backgroundColor: const Color(0xFFE8ECEF),
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.mini_projects',
-              ),
-              MarkerLayer(
-                markers: [
-                  Marker(
-                    point: point,
-                    width: 56,
-                    height: 56,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E5BD6),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black38, blurRadius: 10),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.flight_land_rounded,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          child: map,
         ),
         Positioned(
           left: 20,
           right: 20,
           bottom: 56,
+          // A solid card: a backdrop blur over the map is re-run every frame.
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-                color: Colors.white.withValues(alpha: .78),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      trArgs(lang, 'welcome_to', {'city': city}),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w800,
-                      ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              color: Colors.white.withValues(alpha: .92),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    trArgs(lang, 'welcome_to', {'city': city}),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w800,
                     ),
-                    Text(
-                      '$name (${airport.code})',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.black54,
-                      ),
+                  ),
+                  Text(
+                    '$name (${airport.code})',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.black54,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -857,6 +840,57 @@ class _DestinationMap extends StatelessWidget {
               fontSize: 10,
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// OpenStreetMap tiles around the destination airport with a landing marker.
+class _AirportTiles extends StatelessWidget {
+  const _AirportTiles({required this.at});
+
+  final (double, double) at;
+
+  @override
+  Widget build(BuildContext context) {
+    final point = LatLng(at.$1, at.$2);
+    return FlutterMap(
+      options: MapOptions(
+        initialCenter: point,
+        initialZoom: 12.5,
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.none,
+        ),
+        backgroundColor: const Color(0xFFE8ECEF),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.mini_projects',
+        ),
+        MarkerLayer(
+          markers: [
+            Marker(
+              point: point,
+              width: 56,
+              height: 56,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E5BD6),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black38, blurRadius: 10),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.flight_land_rounded,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

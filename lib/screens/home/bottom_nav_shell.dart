@@ -23,12 +23,22 @@ class _MainShellState extends State<MainShell> {
     ProfileScreen(),
   ];
 
+  /// Tabs are built on first visit, then kept alive by the IndexedStack, so
+  /// the first frame after sign-in only builds the home tab.
+  final _visited = <int>{0};
+
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<LanguageProvider>().languageCode;
 
     return Scaffold(
-      body: IndexedStack(index: index, children: pages),
+      body: IndexedStack(
+        index: index,
+        children: [
+          for (var i = 0; i < pages.length; i++)
+            _visited.contains(i) ? pages[i] : const SizedBox.shrink(),
+        ],
+      ),
       // Material 3 navigation bar: 48dp+ targets, selection semantics and
       // the indicator come from the platform component and the app theme.
       bottomNavigationBar: NavigationBar(
@@ -57,6 +67,9 @@ class _MainShellState extends State<MainShell> {
 
   void _setIndex(int value) {
     if (index == value) return;
-    setState(() => index = value);
+    setState(() {
+      index = value;
+      _visited.add(value);
+    });
   }
 }

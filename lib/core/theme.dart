@@ -29,8 +29,10 @@ class AppTheme {
   static Color info(Brightness b) =>
       b == Brightness.dark ? const Color(0xFF8DB4FF) : const Color(0xFF1F55C9);
 
-  static ThemeData get light => _build(Brightness.light);
-  static ThemeData get dark => _build(Brightness.dark);
+  // Built once: a fresh ThemeData on every rebuild makes MaterialApp animate
+  // a theme change across the whole tree.
+  static final ThemeData light = _build(Brightness.light);
+  static final ThemeData dark = _build(Brightness.dark);
 
   static ThemeData _build(Brightness brightness) {
     final isDark = brightness == Brightness.dark;

@@ -129,7 +129,12 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
     // No point routing from another country (e.g. the emulator's default
     // Googleplex fix); the service-area check fails either way.
     if (_distanceToAirportKm(airport, from) > _routingLimitKm) {
-      if (mounted) setState(() => road = null);
+      if (mounted) {
+        setState(() {
+          road = null;
+          routing = false;
+        });
+      }
       return;
     }
     if (mounted) setState(() => routing = true);
@@ -139,7 +144,9 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
       toLat: airport.latitude,
       toLng: airport.longitude,
     );
-    if (!mounted || currentLocation != from) return;
+    if (!mounted) return;
+    // A newer location started its own lookup; it will clear the spinner.
+    if (currentLocation != from) return;
     setState(() {
       road = route;
       routing = false;
@@ -163,12 +170,20 @@ class _AirportTransferSectionState extends State<AirportTransferSection> {
       throw const _GpsLocationException('gps_permission_denied_forever');
     }
 
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 20),
-      ),
-    );
+    // A recent cached fix answers instantly; a fresh high-accuracy fix can
+    // take up to the time limit. A pickup point does not need GPS precision.
+    final cached = await Geolocator.getLastKnownPosition();
+    final position =
+        cached != null &&
+            DateTime.now().difference(cached.timestamp) <
+                const Duration(minutes: 5)
+        ? cached
+        : await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.medium,
+              timeLimit: Duration(seconds: 10),
+            ),
+          );
     return GpsLocationEntity(
       latitude: position.latitude,
       longitude: position.longitude,

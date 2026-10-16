@@ -14,10 +14,13 @@ class NeonFlightApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settings = context.watch<SettingsProvider>();
-    final language = context.watch<LanguageProvider>();
-    final auth = context.watch<AuthProvider>();
-    final darkMode = settings.darkMode;
+    // select, not watch: rebuild the app root only when these values change,
+    // not on every login spinner or notification toggle.
+    final darkMode = context.select<SettingsProvider, bool>((s) => s.darkMode);
+    final locale = context.select<LanguageProvider, Locale>((l) => l.locale);
+    final signedIn = context.select<AuthProvider, bool>(
+      (a) => a.currentUser != null,
+    );
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -25,7 +28,7 @@ class NeonFlightApp extends StatelessWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
-      locale: language.locale,
+      locale: locale,
       builder: (context, child) {
         final theme = Theme.of(context);
         final isDark = theme.brightness == Brightness.dark;
@@ -33,17 +36,20 @@ class NeonFlightApp extends StatelessWidget {
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
-            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            statusBarIconBrightness: isDark
+                ? Brightness.light
+                : Brightness.dark,
             statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
             systemNavigationBarColor: theme.scaffoldBackgroundColor,
-            systemNavigationBarIconBrightness:
-                isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarIconBrightness: isDark
+                ? Brightness.light
+                : Brightness.dark,
             systemNavigationBarDividerColor: Colors.transparent,
           ),
           child: child ?? const SizedBox.shrink(),
         );
       },
-      home: auth.currentUser == null ? const LoginScreen() : const MainShell(),
+      home: signedIn ? const MainShell() : const LoginScreen(),
     );
   }
 }

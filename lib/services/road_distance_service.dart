@@ -45,7 +45,7 @@ class RoadDistanceService {
       '$_baseUrl/$fromLng,$fromLat;$toLng,$toLat?overview=false',
     );
     try {
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      final response = await http.get(uri).timeout(const Duration(seconds: 5));
       if (response.statusCode != 200) return null;
       return parse(response.body);
     } catch (_) {
